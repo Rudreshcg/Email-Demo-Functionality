@@ -122,13 +122,86 @@ def analyze_image_table_grid(
         print("[DEBUG] Image model raw grid:")
         print(raw[:4000])
     data = _json_guard(raw)
+    # If _json_guard fails (e.g., text before/after JSON), try to extract JSON from text
     if not data:
+        import re
+        # 1) Try to find JSON array by finding balanced brackets
+        # Find the first occurrence of '[{' and then find matching '}]'
+        start_pos = raw.find('[{')
+        if start_pos != -1:
+            # Find matching closing bracket by counting braces and brackets
+            bracket_count = 1  # We've seen one '['
+            brace_count = 1     # We've seen one '{' inside the '['
+            in_string = False
+            escape_next = False
+            end_pos = -1
+            for i in range(start_pos + 2, len(raw)):
+                char = raw[i]
+                if escape_next:
+                    escape_next = False
+                    continue
+                if char == '\\':
+                    escape_next = True
+                    continue
+                if char == '"' and not escape_next:
+                    in_string = not in_string
+                    continue
+                if not in_string:
+                    if char == '[':
+                        bracket_count += 1
+                    elif char == ']':
+                        bracket_count -= 1
+                        if bracket_count == 0:
+                            end_pos = i + 1
+                            break
+                    elif char == '{':
+                        brace_count += 1
+                    elif char == '}':
+                        brace_count -= 1
+            if end_pos > start_pos:
+                try:
+                    json_str = raw[start_pos:end_pos]
+                    if debug:
+                        print(f"[DEBUG] Extracted JSON substring (length {len(json_str)})")
+                    parsed = json.loads(_remove_trailing_commas(_fix_unquoted_thousands_numbers(json_str)))
+                    if isinstance(parsed, dict):
+                        data = [parsed]
+                    elif isinstance(parsed, list):
+                        data = parsed
+                except Exception as e:
+                    if debug:
+                        print(f"[DEBUG] Failed to parse extracted JSON: {e}")
+                    data = None
+        # 2) As a robust fallback, parse any object-like chunks and pick the one with columns+rows
+        if not data:
+            objs = _parse_loose_array(raw) or []
+            for candidate in objs:
+                if isinstance(candidate, dict) and "columns" in candidate and "rows" in candidate:
+                    data = [candidate]
+                    break
+    if not data:
+        if debug:
+            print("[DEBUG] No grid data extracted from response")
         return None
-    obj = data[0] if isinstance(data, list) else data
+    # Select the first dict that has columns and rows
+    obj = None
+    if isinstance(data, list):
+        for item in data:
+            if isinstance(item, dict) and "columns" in item and "rows" in item:
+                obj = item
+                break
+    elif isinstance(data, dict):
+        obj = data
     if not isinstance(obj, dict):
+        if debug:
+            print("[DEBUG] No valid grid object found (missing columns or rows)")
         return None
     if "columns" not in obj or "rows" not in obj:
+        if debug:
+            print("[DEBUG] Grid object missing columns or rows keys")
         return None
+    if debug:
+        print(f"[DEBUG] Successfully extracted grid with {len(obj.get('columns', []))} columns and {len(obj.get('rows', []))} rows")
     return obj
 
 

@@ -288,23 +288,27 @@ def handle_eml(path: str, bedrock, dry_run: bool, debug: bool = False) -> List[D
 			)
 			if grid:
 				if debug:
+					print("[DEBUG] Grid extracted successfully, using grid expansion")
+				if debug:
 					print("[DEBUG] Running grid month correction...")
 				grid = correct_grid_months(bedrock, grid, debug=debug)
-				# Second pass: validate Jul/Aug using the image itself (temporarily disabled to rely on heuristic)
-				# if debug:
-				#     print("[DEBUG] Refining projection with image...")
-				# grid = refine_projection_with_image(bedrock, img_bytes, fmt, grid, debug=debug)
 				image_rows = expand_grid_to_requirements(grid, "email-image", os.path.basename(path), parsed.sender, debug=debug)
+				if debug:
+					print(f"[DEBUG] Grid expansion returned {len(image_rows)} rows")
 			else:
+				if debug:
+					print("[DEBUG] Grid extraction failed, falling back to raw image extraction")
 				image_rows = analyze_image_requirements(
-				bedrock,
-				image_bytes=img_bytes,
-				image_format=fmt,
-				source="email-image",
-				source_file=os.path.basename(path),
-				debug=debug,
-				context_text=f"From: {parsed.sender}\nSubject: {parsed.subject}\nDate: {parsed.date}"
+					bedrock,
+					image_bytes=img_bytes,
+					image_format=fmt,
+					source="email-image",
+					source_file=os.path.basename(path),
+					debug=debug,
+					context_text=f"From: {parsed.sender}\nSubject: {parsed.subject}\nDate: {parsed.date}"
 				)
+				if debug:
+					print(f"[DEBUG] Raw image extraction returned {len(image_rows)} rows")
 			rows.extend(_sanitize_rows(image_rows, parsed.sender, "email-image", os.path.basename(path)))
 
 	# Process xlsx attachments
@@ -424,22 +428,27 @@ def handle_eml_bytes(raw_bytes: bytes, label: str, bedrock, dry_run: bool, debug
 			)
 			if grid:
 				if debug:
+					print("[DEBUG] Grid extracted successfully, using grid expansion")
+				if debug:
 					print("[DEBUG] Running grid month correction...")
 				grid = correct_grid_months(bedrock, grid, debug=debug)
-				# if debug:
-				#     print("[DEBUG] Refining projection with image...")
-				# grid = refine_projection_with_image(bedrock, img_bytes, fmt, grid, debug=debug)
 				image_rows = expand_grid_to_requirements(grid, "email-image", f"{label}", parsed.sender, debug=debug)
+				if debug:
+					print(f"[DEBUG] Grid expansion returned {len(image_rows)} rows")
 			else:
+				if debug:
+					print("[DEBUG] Grid extraction failed, falling back to raw image extraction")
 				image_rows = analyze_image_requirements(
-				bedrock,
-				image_bytes=img_bytes,
-				image_format=fmt,
-				source="email-image",
-				source_file=f"{label}",
-				debug=debug,
-				context_text=f"From: {parsed.sender}\nSubject: {parsed.subject}\nDate: {parsed.date}"
+					bedrock,
+					image_bytes=img_bytes,
+					image_format=fmt,
+					source="email-image",
+					source_file=f"{label}",
+					debug=debug,
+					context_text=f"From: {parsed.sender}\nSubject: {parsed.subject}\nDate: {parsed.date}"
 				)
+				if debug:
+					print(f"[DEBUG] Raw image extraction returned {len(image_rows)} rows")
 			rows.extend(_sanitize_rows(image_rows, parsed.sender, "email-image", f"{label}"))
 
 	for (filename, xbytes) in parsed.xlsx_attachments:

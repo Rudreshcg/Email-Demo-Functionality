@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Requirements Extractor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 30px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 0.95em;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            padding: 12px 20px;
+            border-radius: 6px;
+            font-weight: 500;
+            display: inline-block;
+            min-width: 200px;
+            text-align: center;
+        }
+        
+        .status.idle {
+            background: #f0f0f0;
+            color: #666;
+        }
+        
+        .status.processing {
+            background: #fff3cd;
+            color: #856404;
+            animation: pulse 1.5s infinite;
+        }
+        
+        .status.completed {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .message {
+            margin-top: 10px;
+            color: #555;
+            font-size: 0.9em;
+        }
+        
+        .data-section {
+            margin-top: 30px;
+        }
+        
+        .data-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .data-header h2 {
+            color: #333;
+            font-size: 1.5em;
+        }
+        
+        .download-btn {
+            background: #28a745;
+            font-size: 14px;
+            padding: 8px 20px;
+        }
+        
+        .download-btn:hover:not(:disabled) {
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+        
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+            font-style: italic;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📧 Email Requirements Extractor</h1>
+        <p class="subtitle">Process emails and extract material requirements into Excel</p>
+        
+        <div class="controls">
+            <button id="processBtn" onclick="triggerProcess()">
+                🚀 Process Emails
+            </button>
+            <div class="status idle" id="status">
+                <span id="statusText">Ready</span>
+            </div>
+        </div>
+        
+        <div class="message" id="message"></div>
+        
+        <div class="data-section">
+            <div class="data-header">
+                <h2>📊 Extracted Requirements</h2>
+                <button class="download-btn" id="downloadBtn" onclick="downloadFile()" style="display: none;">
+                    📥 Download Excel
+                </button>
+            </div>
+            
+            <div id="tableContainer">
+                <div class="no-data">No data loaded. Click "Process Emails" to start.</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let statusCheckInterval;
+        
+        function triggerProcess() {
+            const btn = document.getElementById('processBtn');
+            btn.disabled = true;
+            
+            fetch('/api/process', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    updateStatus('error', data.error);
+                    btn.disabled = false;
+                } else {
+                    updateStatus('processing', 'Processing started...');
+                    startStatusCheck();
+                }
+            })
+            .catch(error => {
+                updateStatus('error', 'Failed to start processing: ' + error);
+                btn.disabled = false;
+            });
+        }
+        
+        function startStatusCheck() {
+            if (statusCheckInterval) {
+                clearInterval(statusCheckInterval);
+            }
+            
+            statusCheckInterval = setInterval(() => {
+                fetch('/api/status')
+                    .then(response => response.json())
+                    .then(data => {
+                        updateStatus(data.status, data.message);
+                        
+                        if (data.status === 'completed' || data.status === 'error') {
+                            clearInterval(statusCheckInterval);
+                            document.getElementById('processBtn').disabled = false;
+                            
+                            if (data.status === 'completed') {
+                                loadData();
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Status check error:', error);
+                    });
+            }, 2000); // Check every 2 seconds
+        }
+        
+        function updateStatus(status, message) {
+            const statusEl = document.getElementById('status');
+            const statusText = document.getElementById('statusText');
+            const messageEl = document.getElementById('message');
+            
+            statusEl.className = 'status ' + status;
+            
+            if (status === 'processing') {
+                statusText.innerHTML = '<span class="spinner"></span>Processing...';
+            } else {
+                statusText.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+            }
+            
+            messageEl.textContent = message || '';
+        }
+        
+        function loadData() {
+            fetch('/api/data')
+                .then(response => {
+                    if (response.status === 404) {
+                        document.getElementById('tableContainer').innerHTML = 
+                            '<div class="no-data">No data available yet.</div>';
+                        return;
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data && data.data && data.data.length > 0) {
+                        renderTable(data.columns, data.data);
+                        document.getElementById('downloadBtn').style.display = 'inline-block';
+                    } else {
+                        document.getElementById('tableContainer').innerHTML = 
+                            '<div class="no-data">No requirements extracted.</div>';
+                        document.getElementById('downloadBtn').style.display = 'none';
+                    }
+                })
+                .catch(error => {
+                    console.error('Load data error:', error);
+                    document.getElementById('tableContainer').innerHTML = 
+                        '<div class="no-data">Error loading data: ' + error + '</div>';
+                });
+        }
+        
+        function renderTable(columns, data) {
+            let html = '<table><thead><tr>';
+            
+            columns.forEach(col => {
+                html += `<th>${escapeHtml(col)}</th>`;
+            });
+            
+            html += '</tr></thead><tbody>';
+            
+            data.forEach(row => {
+                html += '<tr>';
+                columns.forEach(col => {
+                    const value = row[col] || '';
+                    html += `<td>${escapeHtml(String(value))}</td>`;
+                });
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+            document.getElementById('tableContainer').innerHTML = html;
+        }
+        
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+        
+        function downloadFile() {
+            window.location.href = '/api/download';
+        }
+        
+        // Load data on page load if available
+        window.addEventListener('load', () => {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'completed' && data.rows_count > 0) {
+                        loadData();
+                    }
+                })
+                .catch(err => console.error(err));
+        });
+    </script>
+</body>
+</html>
+

@@ -7,3 +7,4 @@ python-dateutil==2.9.0.post0
 chardet==5.2.0
 Pillow==10.4.0
 click==8.1.7
+flask==3.0.0
