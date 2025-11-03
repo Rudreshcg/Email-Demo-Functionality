@@ -1,0 +1,661 @@
+Received: from PNZPR01MB8060.INDPRD01.PROD.OUTLOOK.COM (2603:1096:c01:39::11)
+ by BMXPR01MB3718.INDPRD01.PROD.OUTLOOK.COM with HTTPS; Fri, 28 Apr 2023
+ 12:28:09 +0000
+Received: from BMXPR01MB3718.INDPRD01.PROD.OUTLOOK.COM (2603:1096:b00:60::15)
+ by PNZPR01MB8060.INDPRD01.PROD.OUTLOOK.COM (2603:1096:c01:39::11) with
+ Microsoft SMTP Server (version=TLS1_2,
+ cipher=TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384) id 15.20.6340.24; Fri, 28 Apr
+ 2023 12:28:08 +0000
+Received: from BMXPR01MB3718.INDPRD01.PROD.OUTLOOK.COM
+ ([fe80::f9b8:56b6:a4a0:880c]) by BMXPR01MB3718.INDPRD01.PROD.OUTLOOK.COM
+ ([fe80::f9b8:56b6:a4a0:880c%6]) with mapi id 15.20.6340.023; Fri, 28 Apr 2023
+ 12:28:08 +0000
+From: "Himanshu Tiwari" <himanshu.t@encubeethicals.com>
+To: Himanshu Tiwari <himanshu.t@encubeethicals.com>
+References: <BMXPR01MB37189A8DF7EBED6E6D78AD9AF5BF9@BMXPR01MB3718.INDPRD01.PROD.OUTLOOK.COM> <BMXPR01MB37180F80DE55F56FD91EA2F7F59A9@BMXPR01MB3718.INDPRD01.PROD.OUTLOOK.COM> <BMXPR01MB37188249788FAB5E896C3EB4F5639@BMXPR01MB3718.INDPRD01.PROD.OUTLOOK.COM> <BMXPR01MB3718333E7118ECE465F4F788F5659@BMXPR01MB3718.INDPRD01.PROD.OUTLOOK.COM> <MAZPR01MB719901AA5A9C34C731D2064BAD659@MAZPR01MB7199.INDPRD01.PROD.OUTLOOK.COM>
+In-Reply-To: <MAZPR01MB719901AA5A9C34C731D2064BAD659@MAZPR01MB7199.INDPRD01.PROD.OUTLOOK.COM>
+Subject: FW: Stock details - Dapsone & Acyclovir
+Date: Fri, 28 Apr 2023 08:28:08 -0400
+Message-ID: <BMXPR01MB37189907E6FC98DCB3529EECF56B9@BMXPR01MB3718.INDPRD01.PROD.OUTLOOK.COM>
+Content-Type: multipart/alternative;
+	boundary="----=_NextPart_000_0122_01DC4917.4E42D330"
+X-Mailer: Microsoft Outlook 16.0
+Authentication-Results: dkim=none (message not signed) header.d=none;dmarc=none action=none header.from=encubeethicals.com;
+Thread-Index: AdlXKVl4vDluovkuS4iR22D+jbndnAVJ6izQAcs75WABLggaMAACy3sAAGLXmQA=
+Content-Language: en-us
+X-MS-Has-Attach:
+X-MS-TNEF-Correlator:
+x-ms-publictraffictype: Email
+x-ms-traffictypediagnostic: BMXPR01MB3718:EE_|PNZPR01MB8060:EE_|BMXPR01MB3718:EE_
+x-ms-office365-filtering-correlation-id: 6339d86b-131e-4588-0af4-08db47e4065d
+x-microsoft-antispam: BCL:0;
+x-microsoft-antispam-message-info: xrPlO2Uk45APbrQfjDEC4If8wX2LsI2+/Rh7avolmHeVJ9O7WCdkX0YI8uUsl3GD3cdm3H3sJyvWPFU3DR5XWAWgTrUWwI9cHq2nrdPO+NDlFfmitZPVPOZ7ew/B00n+ucoOk8X1s4V9OB1CAfjWiHZv6TZoBSgNV9w+dAdkoyvOdT/QtrEPVTLwGcugp982qMJcpjO39TEZq7hDsalRWdNyIZtn2VYwNRhjpSKfc31x1saduJtwlbwjrYhlYGwfE3fHDuutm/ZCrzwwSpmKCpB0fKQmt7uHaHFvSqAEXKHPEYn2C0URMt9agKd2Kwjj+nBwypLinsUVKpQQvnB8HE54PT3BHPLPFxT6aCJR+evMK2PE2T6lnU8FN+rKj3IFEBESR6S7YAV6KNYCjHBGHY+4jfdKGTOGGXGGil2XZgbfFZLFOj2YMMy9sQZpycTuRCEIeMSsmK7nraSCsqZ9EFMMHgkZQNWXO/FZ52C8IqIUiLnE4LL2+jcUJSur9uGkF8ccSpFGGiA/rUYdBKYQf0w9bvCFJKe8Bn3gDVNmULPfyZ64H2+q++0uqZjFS8YKsxO7JfsOOcKoBZiJkd+dLwWkAYt4i59vGd+gLSMeDEjVixzmbxfqmxWrpf92O8cc
+x-forefront-antispam-report: CIP:255.255.255.255;CTRY:;LANG:en;SCL:-1;SRV:;IPV:NLI;SFV:SKI;H:BMXPR01MB3718.INDPRD01.PROD.OUTLOOK.COM;PTR:;CAT:NONE;SFS:;DIR:INT;
+X-MS-Exchange-CrossTenant-AuthAs: Internal
+X-MS-Exchange-CrossTenant-AuthSource: BMXPR01MB3718.INDPRD01.PROD.OUTLOOK.COM
+X-MS-Exchange-CrossTenant-Network-Message-Id: 6339d86b-131e-4588-0af4-08db47e4065d
+X-MS-Exchange-CrossTenant-originalarrivaltime: 28 Apr 2023 12:28:08.7710 (UTC)
+X-MS-Exchange-CrossTenant-fromentityheader: Hosted
+X-MS-Exchange-CrossTenant-id: d6de8be9-9a8c-43bc-8cb6-6c85946c95a6
+X-MS-Exchange-CrossTenant-mailboxtype: HOSTED
+X-MS-Exchange-CrossTenant-userprincipalname: rYzYAo+gyV6dShQhIrRPP/vXRM7+kK50vqAUvodkfCZguiClZYYRvZhUPx5Op0anqSSM9PPpO21jn7qAWquUSmngyBBlU7N5A+IuPMG/i84=
+X-MS-Exchange-Transport-CrossTenantHeadersStamped: PNZPR01MB8060
+X-MS-Exchange-Organization-AuthMechanism: 04
+X-MS-Exchange-Organization-AuthSource: BMXPR01MB3718.INDPRD01.PROD.OUTLOOK.COM
+X-MS-Exchange-Organization-Network-Message-Id: 6339d86b-131e-4588-0af4-08db47e4065d
+x-ms-exchange-transport-endtoendlatency: 00:00:00.8660543
+x-ms-exchange-processed-by-bccfoldering: 15.20.6340.023
+X-Microsoft-Antispam-Mailbox-Delivery: ucf:0;jmr:0;auth:0;dest:I;ENG:(910001)(944506478)(944626604)(920097)(425001)(930097);
+x-ms-exchange-organization-originalclientipaddress: 49.248.0.2
+x-ms-exchange-organization-originalserveripaddress: 2603:1096:b00:60::15
+acceptlanguage: en-US
+MIME-Version: 1.0
+
+------=_NextPart_000_0122_01DC4917.4E42D330
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+
+ 
+ 					Requirement shared 	Tentative
+forecast for material planning - only API and pumps / bottles / Tubes as per
+lead time	Vol. in units					M1	M2
+M3	M4	M5	M6	M7	M8	M9	M10	M11	FG
+Code (TPL)	Product Description	Label	Pack	Batch size
+May'23 Qty	June'23 Qty	July'23 Qty	Aug'23 Qty	Sept'23 Qty
+Oct'23 Qty	Nov'23 Qty	Dec'23 Qty	Jan'24 Qty	Feb'24 Qty
+Mar'24 Qty	5518483	D Gel 60	T	1	2651	5302	8250
+7953	0	5302	0	7953	0	5302	5302	5518484	D
+Gel 90	T	1	1754	 	1850	 	0	0	1754
+0	1754	0	1754	1754	5520136	DM Gel 60	M	1
+2651	0	45067	0	21208	0	26510	0	26510	0
+0	26510	5520138	DM Gel 90	M	1	1754	0	1754
+0	0	0	1754	0	0	0	0	1754
+5515988	A 15gm	T	1	12667	 	 	25334
+12667	0	12667	0	12667	12667	0	5515989	A 30gm	T
+1	6333	 	 	6333	 	6333	0	6333	0
+0	6333	0	 
+
+------=_NextPart_000_0122_01DC4917.4E42D330
+Content-Type: text/html; charset="us-ascii"
+Content-Transfer-Encoding: quoted-printable
+
+<html xmlns:v=3D"urn:schemas-microsoft-com:vml" xmlns:o=3D"urn:schemas-micr=
+osoft-com:office:office" xmlns:w=3D"urn:schemas-microsoft-com:office:word" =
+xmlns:m=3D"http://schemas.microsoft.com/office/2004/12/omml" xmlns=3D"http:=
+//www.w3.org/TR/REC-html40"><head>
+<meta http-equiv=3D"Content-Type" content=3D"text/html; charset=3Dus-ascii"=
+><meta name=3D"Generator" content=3D"Microsoft Word 15 (filtered medium)"><=
+title>Page Title</title><style><!--
+/* Font Definitions */
+@font-face
+	{font-family:"Cambria Math";
+	panose-1:2 4 5 3 5 4 6 3 2 4;}
+@font-face
+	{font-family:Calibri;
+	panose-1:2 15 5 2 2 2 4 3 2 4;}
+/* Style Definitions */
+p.MsoNormal, li.MsoNormal, div.MsoNormal
+	{margin:0cm;
+	font-size:11.0pt;
+	font-family:"Calibri",sans-serif;}
+span.EmailStyle23
+	{mso-style-type:personal-compose;
+	font-family:"Calibri",sans-serif;
+	color:windowtext;}
+.MsoChpDefault
+	{mso-style-type:export-only;
+	font-size:10.0pt;}
+@page WordSection1
+	{size:612.0pt 792.0pt;
+	margin:72.0pt 72.0pt 72.0pt 72.0pt;}
+div.WordSection1
+	{page:WordSection1;}
+--></style><!--[if gte mso 9]><xml>
+<o:shapedefaults v:ext=3D"edit" spidmax=3D"1026" />
+</xml><![endif]--><!--[if gte mso 9]><xml>
+<o:shapelayout v:ext=3D"edit">
+<o:idmap v:ext=3D"edit" data=3D"1" />
+</o:shapelayout></xml><![endif]--></head><body lang=3D"EN-IN" link=3D"#0563=
+C1" vlink=3D"#954F72" style=3D"word-wrap:break-word"><div class=3D"WordSect=
+ion1"><div><p class=3D"MsoNormal"><span lang=3D"EN-US" style=3D"color:#1F49=
+7D"><o:p> </o:p></span></p><table class=3D"MsoNormalTable" border=3D"0" cel=
+lspacing=3D"0" cellpadding=3D"0" width=3D"1158" style=3D"width:868.6pt;bord=
+er-collapse:collapse"><tbody><tr style=3D"height:45.75pt"><td width=3D"123"=
+ nowrap=3D"" valign=3D"bottom" style=3D"width:92.0pt;padding:0cm 5.4pt 0cm =
+5.4pt;height:45.75pt"><p class=3D"MsoNormal"><span style=3D"font-size:10.0p=
+t;font-family:" Times=3D"" New=3D"" Roman?,serif?=3D""><o:p> </o:p></span><=
+/p></td><td width=3D"249" nowrap=3D"" valign=3D"bottom" style=3D"width:187.=
+0pt;padding:0cm 5.4pt 0cm 5.4pt;height:45.75pt"></td><td width=3D"60" nowra=
+p=3D"" valign=3D"bottom" style=3D"width:44.65pt;padding:0cm 5.4pt 0cm 5.4pt=
+;height:45.75pt"></td><td width=3D"43" nowrap=3D"" valign=3D"bottom" style=
+=3D"width:32.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:45.75pt"></td><td width=
+=3D"52" nowrap=3D"" valign=3D"bottom" style=3D"width:38.8pt;padding:0cm 5.4=
+pt 0cm 5.4pt;height:45.75pt"></td><td width=3D"177" colspan=3D"3" style=3D"=
+width:132.4pt;border:solid windowtext 1.0pt;background:#C6E0B4;padding:0cm =
+5.4pt 0cm 5.4pt;height:45.75pt"><p class=3D"MsoNormal" align=3D"center" sty=
+le=3D"text-align:center"><b><span style=3D"color:black">Requirement shared =
+<o:p></o:p></span></b></p></td><td width=3D"456" colspan=3D"8" style=3D"wid=
+th:341.75pt;border:solid windowtext 1.0pt;border-left:none;background:#FFE6=
+99;padding:0cm 5.4pt 0cm 5.4pt;height:45.75pt"><p class=3D"MsoNormal" align=
+=3D"center" style=3D"text-align:center"><b><span style=3D"color:black">Tent=
+ative forecast for material planning - only API and pumps / bottles / Tubes=
+ as per lead time<o:p></o:p></span></b></p></td></tr><tr style=3D"height:15=
+.75pt"><td width=3D"123" nowrap=3D"" valign=3D"bottom" style=3D"width:92.0p=
+t;padding:0cm 5.4pt 0cm 5.4pt;height:15.75pt"><p class=3D"MsoNormal"><b><sp=
+an style=3D"color:black">Vol. in units<o:p></o:p></span></b></p></td><td wi=
+dth=3D"249" nowrap=3D"" valign=3D"bottom" style=3D"width:187.0pt;padding:0c=
+m 5.4pt 0cm 5.4pt;height:15.75pt"></td><td width=3D"60" nowrap=3D"" valign=
+=3D"bottom" style=3D"width:44.65pt;padding:0cm 5.4pt 0cm 5.4pt;height:15.75=
+pt"></td><td width=3D"43" nowrap=3D"" valign=3D"bottom" style=3D"width:32.0=
+pt;padding:0cm 5.4pt 0cm 5.4pt;height:15.75pt"></td><td width=3D"52" nowrap=
+=3D"" valign=3D"bottom" style=3D"width:38.8pt;padding:0cm 5.4pt 0cm 5.4pt;h=
+eight:15.75pt"></td><td width=3D"60" nowrap=3D"" valign=3D"bottom" style=3D=
+"width:44.8pt;padding:0cm 5.4pt 0cm 5.4pt;height:15.75pt"><p class=3D"MsoNo=
+rmal" align=3D"center" style=3D"text-align:center"><span style=3D"color:bla=
+ck">M1<o:p></o:p></span></p></td><td width=3D"61" nowrap=3D"" valign=3D"bot=
+tom" style=3D"width:45.6pt;padding:0cm 5.4pt 0cm 5.4pt;height:15.75pt"><p c=
+lass=3D"MsoNormal" align=3D"center" style=3D"text-align:center"><span style=
+=3D"color:black">M2<o:p></o:p></span></p></td><td width=3D"56" nowrap=3D"" =
+valign=3D"bottom" style=3D"width:42.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:=
+15.75pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align:center=
+"><span style=3D"color:black">M3<o:p></o:p></span></p></td><td width=3D"56"=
+ nowrap=3D"" valign=3D"bottom" style=3D"width:42.35pt;padding:0cm 5.4pt 0cm=
+ 5.4pt;height:15.75pt"><p class=3D"MsoNormal" align=3D"center" style=3D"tex=
+t-align:center"><span style=3D"color:black">M4<o:p></o:p></span></p></td><t=
+d width=3D"60" nowrap=3D"" valign=3D"bottom" style=3D"width:45.0pt;padding:=
+0cm 5.4pt 0cm 5.4pt;height:15.75pt"><p class=3D"MsoNormal" align=3D"center"=
+ style=3D"text-align:center"><span style=3D"color:black">M5<o:p></o:p></spa=
+n></p></td><td width=3D"56" nowrap=3D"" valign=3D"bottom" style=3D"width:42=
+.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:15.75pt"><p class=3D"MsoNormal" ali=
+gn=3D"center" style=3D"text-align:center"><span style=3D"color:black">M6<o:=
+p></o:p></span></p></td><td width=3D"57" nowrap=3D"" valign=3D"bottom" styl=
+e=3D"width:42.9pt;padding:0cm 5.4pt 0cm 5.4pt;height:15.75pt"><p class=3D"M=
+soNormal" align=3D"center" style=3D"text-align:center"><span style=3D"color=
+:black">M7<o:p></o:p></span></p></td><td width=3D"56" nowrap=3D"" valign=3D=
+"bottom" style=3D"width:42.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:15.75pt">=
+<p class=3D"MsoNormal" align=3D"center" style=3D"text-align:center"><span s=
+tyle=3D"color:black">M8<o:p></o:p></span></p></td><td width=3D"56" nowrap=
+=3D"" valign=3D"bottom" style=3D"width:42.0pt;padding:0cm 5.4pt 0cm 5.4pt;h=
+eight:15.75pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align:=
+center"><span style=3D"color:black">M9<o:p></o:p></span></p></td><td width=
+=3D"56" nowrap=3D"" valign=3D"bottom" style=3D"width:42.0pt;padding:0cm 5.4=
+pt 0cm 5.4pt;height:15.75pt"><p class=3D"MsoNormal" align=3D"center" style=
+=3D"text-align:center"><span style=3D"color:black">M10<o:p></o:p></span></p=
+></td><td width=3D"58" nowrap=3D"" valign=3D"bottom" style=3D"width:43.5pt;=
+padding:0cm 5.4pt 0cm 5.4pt;height:15.75pt"><p class=3D"MsoNormal" align=3D=
+"center" style=3D"text-align:center"><span style=3D"color:black">M11<o:p></=
+o:p></span></p></td></tr><tr style=3D"height:30.75pt"><td width=3D"123" sty=
+le=3D"width:92.0pt;border:solid windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4p=
+t;height:30.75pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-ali=
+gn:center"><b><span style=3D"color:black">FG Code (TPL)<o:p></o:p></span></=
+b></p></td><td width=3D"249" style=3D"width:187.0pt;border:solid windowtext=
+ 1.0pt;border-left:none;padding:0cm 5.4pt 0cm 5.4pt;height:30.75pt"><p clas=
+s=3D"MsoNormal"><b><span style=3D"color:black">Product Description<o:p></o:=
+p></span></b></p></td><td width=3D"60" style=3D"width:44.65pt;border:solid =
+windowtext 1.0pt;border-left:none;padding:0cm 5.4pt 0cm 5.4pt;height:30.75p=
+t"><p class=3D"MsoNormal"><b><span style=3D"color:black">Label<o:p></o:p></=
+span></b></p></td><td width=3D"43" style=3D"width:32.0pt;border:solid windo=
+wtext 1.0pt;border-left:none;padding:0cm 5.4pt 0cm 5.4pt;height:30.75pt"><p=
+ class=3D"MsoNormal" align=3D"center" style=3D"text-align:center"><b><span =
+style=3D"color:black">Pack<o:p></o:p></span></b></p></td><td width=3D"52" s=
+tyle=3D"width:38.8pt;border-top:solid windowtext 1.0pt;border-left:none;bor=
+der-bottom:solid windowtext 1.0pt;border-right:none;padding:0cm 5.4pt 0cm 5=
+.4pt;height:30.75pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-=
+align:center"><b><span style=3D"color:black">Batch size<o:p></o:p></span></=
+b></p></td><td width=3D"60" style=3D"width:44.8pt;border:solid windowtext 1=
+.0pt;background:#DDEBF7;padding:0cm 5.4pt 0cm 5.4pt;height:30.75pt"><p clas=
+s=3D"MsoNormal" align=3D"center" style=3D"text-align:center"><b><span style=
+=3D"color:black">May'23 Qty<o:p></o:p></span></b></p></td><td width=3D"61" =
+style=3D"width:45.6pt;border:solid windowtext 1.0pt;border-left:none;backgr=
+ound:#DDEBF7;padding:0cm 5.4pt 0cm 5.4pt;height:30.75pt"><p class=3D"MsoNor=
+mal" align=3D"center" style=3D"text-align:center"><b><span style=3D"color:b=
+lack">June'23 Qty<o:p></o:p></span></b></p></td><td width=3D"56" style=3D"w=
+idth:42.0pt;border:solid windowtext 1.0pt;border-left:none;background:#DDEB=
+F7;padding:0cm 5.4pt 0cm 5.4pt;height:30.75pt"><p class=3D"MsoNormal" align=
+=3D"center" style=3D"text-align:center"><b><span style=3D"color:black">July=
+'23 Qty<o:p></o:p></span></b></p></td><td width=3D"56" style=3D"width:42.35=
+pt;border:solid windowtext 1.0pt;border-left:none;background:#FFE699;paddin=
+g:0cm 5.4pt 0cm 5.4pt;height:30.75pt"><p class=3D"MsoNormal" align=3D"cente=
+r" style=3D"text-align:center"><b><span style=3D"color:black">Aug'23 Qty<o:=
+p></o:p></span></b></p></td><td width=3D"60" style=3D"width:45.0pt;border:s=
+olid windowtext 1.0pt;border-left:none;background:#FFE699;padding:0cm 5.4pt=
+ 0cm 5.4pt;height:30.75pt"><p class=3D"MsoNormal" align=3D"center" style=3D=
+"text-align:center"><b><span style=3D"color:black">Sept'23 Qty<o:p></o:p></=
+span></b></p></td><td width=3D"56" style=3D"width:42.0pt;border:solid windo=
+wtext 1.0pt;border-left:none;background:#FFE699;padding:0cm 5.4pt 0cm 5.4pt=
+;height:30.75pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-alig=
+n:center"><b><span style=3D"color:black">Oct'23 Qty<o:p></o:p></span></b></=
+p></td><td width=3D"57" style=3D"width:42.9pt;border:solid windowtext 1.0pt=
+;border-left:none;background:#FFE699;padding:0cm 5.4pt 0cm 5.4pt;height:30.=
+75pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align:center"><=
+b><span style=3D"color:black">Nov'23 Qty<o:p></o:p></span></b></p></td><td =
+width=3D"56" style=3D"width:42.0pt;border:solid windowtext 1.0pt;border-lef=
+t:none;background:#FFE699;padding:0cm 5.4pt 0cm 5.4pt;height:30.75pt"><p cl=
+ass=3D"MsoNormal" align=3D"center" style=3D"text-align:center"><b><span sty=
+le=3D"color:black">Dec'23 Qty<o:p></o:p></span></b></p></td><td width=3D"56=
+" style=3D"width:42.0pt;border:solid windowtext 1.0pt;border-left:none;back=
+ground:#FFE699;padding:0cm 5.4pt 0cm 5.4pt;height:30.75pt"><p class=3D"MsoN=
+ormal" align=3D"center" style=3D"text-align:center"><b><span style=3D"color=
+:black">Jan'24 Qty<o:p></o:p></span></b></p></td><td width=3D"56" style=3D"=
+width:42.0pt;border:solid windowtext 1.0pt;border-left:none;background:#FFE=
+699;padding:0cm 5.4pt 0cm 5.4pt;height:30.75pt"><p class=3D"MsoNormal" alig=
+n=3D"center" style=3D"text-align:center"><b><span style=3D"color:black">Feb=
+'24 Qty<o:p></o:p></span></b></p></td><td width=3D"58" style=3D"width:43.5p=
+t;border:solid windowtext 1.0pt;border-left:none;background:#FFE699;padding=
+:0cm 5.4pt 0cm 5.4pt;height:30.75pt"><p class=3D"MsoNormal" align=3D"center=
+" style=3D"text-align:center"><b><span style=3D"color:black">Mar'24 Qty<o:p=
+></o:p></span></b></p></td></tr><tr style=3D"height:15.0pt"><td width=3D"12=
+3" nowrap=3D"" style=3D"width:92.0pt;border:solid windowtext 1.0pt;border-t=
+op:none;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNormal" a=
+lign=3D"center" style=3D"text-align:center"><span style=3D"color:black">551=
+8483<o:p></o:p></span></p></td><td width=3D"249" nowrap=3D"" style=3D"width=
+:187.0pt;border-top:none;border-left:none;border-bottom:solid windowtext 1.=
+0pt;border-right:solid windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:=
+15.0pt"><p class=3D"MsoNormal">D Gel 60<span style=3D"color:black"><o:p></o=
+:p></span></p></td><td width=3D"60" nowrap=3D"" style=3D"width:44.65pt;bord=
+er-top:none;border-left:none;border-bottom:solid windowtext 1.0pt;border-ri=
+ght:solid windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p cl=
+ass=3D"MsoNormal">T<span style=3D"color:black"><o:p></o:p></span></p></td><=
+td width=3D"43" nowrap=3D"" style=3D"width:32.0pt;border-top:none;border-le=
+ft:none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext =
+1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNormal" ali=
+gn=3D"center" style=3D"text-align:center"><span style=3D"color:black">1<o:p=
+></o:p></span></p></td><td width=3D"52" nowrap=3D"" style=3D"width:38.8pt;b=
+order:none;border-bottom:solid windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt=
+;height:15.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align=
+:center"><span style=3D"color:black">2651<o:p></o:p></span></p></td><td wid=
+th=3D"60" nowrap=3D"" style=3D"width:44.8pt;border:solid windowtext 1.0pt;b=
+order-top:none;background:#C6E0B4;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt=
+"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align:center"><span=
+ style=3D"color:black">5302<o:p></o:p></span></p></td><td width=3D"61" nowr=
+ap=3D"" style=3D"width:45.6pt;border-top:none;border-left:none;border-botto=
+m:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;background:#C6=
+E0B4;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNormal" alig=
+n=3D"center" style=3D"text-align:center"><span style=3D"color:black">8250<o=
+:p></o:p></span></p></td><td width=3D"56" nowrap=3D"" style=3D"width:42.0pt=
+;border-top:none;border-left:none;border-bottom:solid windowtext 1.0pt;bord=
+er-right:solid windowtext 1.0pt;background:#FCE4D6;padding:0cm 5.4pt 0cm 5.=
+4pt;height:15.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-al=
+ign:center"><span style=3D"color:black"> <o:p></o:p></span></p></td><td wid=
+th=3D"56" nowrap=3D"" style=3D"width:42.35pt;border-top:none;border-left:no=
+ne;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt=
+;background:#C6E0B4;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"=
+MsoNormal" align=3D"center" style=3D"text-align:center"><span style=3D"colo=
+r:black">7953<o:p></o:p></span></p></td><td width=3D"60" nowrap=3D"" style=
+=3D"width:45.0pt;border-top:none;border-left:none;border-bottom:solid windo=
+wtext 1.0pt;border-right:solid windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt=
+;height:15.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align=
+:center"><span style=3D"color:black">0<o:p></o:p></span></p></td><td width=
+=3D"56" nowrap=3D"" style=3D"width:42.0pt;border-top:none;border-left:none;=
+border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;ba=
+ckground:#FFE699;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"Mso=
+Normal" align=3D"center" style=3D"text-align:center"><span style=3D"color:b=
+lack">5302<o:p></o:p></span></p></td><td width=3D"57" nowrap=3D"" style=3D"=
+width:42.9pt;border-top:none;border-left:none;border-bottom:solid windowtex=
+t 1.0pt;border-right:solid windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;hei=
+ght:15.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align:cen=
+ter"><span style=3D"color:black">0<o:p></o:p></span></p></td><td width=3D"5=
+6" nowrap=3D"" style=3D"width:42.0pt;border-top:none;border-left:none;borde=
+r-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;backgro=
+und:#FFE699;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNorma=
+l" align=3D"center" style=3D"text-align:center"><span style=3D"color:black"=
+>7953<o:p></o:p></span></p></td><td width=3D"56" nowrap=3D"" style=3D"width=
+:42.0pt;border-top:none;border-left:none;border-bottom:solid windowtext 1.0=
+pt;border-right:solid windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:1=
+5.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align:center">=
+<span style=3D"color:black">0<o:p></o:p></span></p></td><td width=3D"56" no=
+wrap=3D"" style=3D"width:42.0pt;border-top:none;border-left:none;border-bot=
+tom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;background:#=
+FFE699;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNormal" al=
+ign=3D"center" style=3D"text-align:center"><span style=3D"color:black">5302=
+<o:p></o:p></span></p></td><td width=3D"58" nowrap=3D"" style=3D"width:43.5=
+pt;border-top:none;border-left:none;border-bottom:solid windowtext 1.0pt;bo=
+rder-right:solid windowtext 1.0pt;background:#FFE699;padding:0cm 5.4pt 0cm =
+5.4pt;height:15.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-=
+align:center"><span style=3D"color:black">5302<o:p></o:p></span></p></td></=
+tr><tr style=3D"height:15.0pt"><td width=3D"123" nowrap=3D"" style=3D"width=
+:92.0pt;border:solid windowtext 1.0pt;border-top:none;padding:0cm 5.4pt 0cm=
+ 5.4pt;height:15.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text=
+-align:center"><span style=3D"color:black">5518484<o:p></o:p></span></p></t=
+d><td width=3D"249" nowrap=3D"" style=3D"width:187.0pt;border-top:none;bord=
+er-left:none;border-bottom:solid windowtext 1.0pt;border-right:solid window=
+text 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNormal=
+">D Gel 90<span style=3D"color:black"><o:p></o:p></span></p></td><td width=
+=3D"60" nowrap=3D"" style=3D"width:44.65pt;border-top:none;border-left:none=
+;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;p=
+adding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNormal">T<span sty=
+le=3D"color:black"><o:p></o:p></span></p></td><td width=3D"43" nowrap=3D"" =
+style=3D"width:32.0pt;border-top:none;border-left:none;border-bottom:solid =
+windowtext 1.0pt;border-right:solid windowtext 1.0pt;padding:0cm 5.4pt 0cm =
+5.4pt;height:15.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-=
+align:center"><span style=3D"color:black">1<o:p></o:p></span></p></td><td w=
+idth=3D"52" nowrap=3D"" style=3D"width:38.8pt;border:none;border-bottom:sol=
+id windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"=
+MsoNormal" align=3D"center" style=3D"text-align:center"><span style=3D"colo=
+r:black">1754<o:p></o:p></span></p></td><td width=3D"60" nowrap=3D"" style=
+=3D"width:44.8pt;border:solid windowtext 1.0pt;border-top:none;background:#=
+FCE4D6;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNormal" al=
+ign=3D"center" style=3D"text-align:center"><span style=3D"color:black"> <o:=
+p></o:p></span></p></td><td width=3D"61" nowrap=3D"" style=3D"width:45.6pt;=
+border-top:none;border-left:none;border-bottom:solid windowtext 1.0pt;borde=
+r-right:solid windowtext 1.0pt;background:#C6E0B4;padding:0cm 5.4pt 0cm 5.4=
+pt;height:15.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-ali=
+gn:center"><span style=3D"color:black">1850<o:p></o:p></span></p></td><td w=
+idth=3D"56" nowrap=3D"" style=3D"width:42.0pt;border-top:none;border-left:n=
+one;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0p=
+t;background:#FCE4D6;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D=
+"MsoNormal" align=3D"center" style=3D"text-align:center"><span style=3D"col=
+or:black"> <o:p></o:p></span></p></td><td width=3D"56" nowrap=3D"" style=3D=
+"width:42.35pt;border-top:none;border-left:none;border-bottom:solid windowt=
+ext 1.0pt;border-right:solid windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;h=
+eight:15.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align:c=
+enter"><span style=3D"color:black">0<o:p></o:p></span></p></td><td width=3D=
+"60" nowrap=3D"" style=3D"width:45.0pt;border-top:none;border-left:none;bor=
+der-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;paddi=
+ng:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNormal" align=3D"cente=
+r" style=3D"text-align:center"><span style=3D"color:black">0<o:p></o:p></sp=
+an></p></td><td width=3D"56" nowrap=3D"" style=3D"width:42.0pt;border-top:n=
+one;border-left:none;border-bottom:solid windowtext 1.0pt;border-right:soli=
+d windowtext 1.0pt;background:#FFE699;padding:0cm 5.4pt 0cm 5.4pt;height:15=
+.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align:center"><=
+span style=3D"color:black">1754<o:p></o:p></span></p></td><td width=3D"57" =
+nowrap=3D"" style=3D"width:42.9pt;border-top:none;border-left:none;border-b=
+ottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;padding:0c=
+m 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNormal" align=3D"center" st=
+yle=3D"text-align:center"><span style=3D"color:black">0<o:p></o:p></span></=
+p></td><td width=3D"56" nowrap=3D"" style=3D"width:42.0pt;border-top:none;b=
+order-left:none;border-bottom:solid windowtext 1.0pt;border-right:solid win=
+dowtext 1.0pt;background:#FFE699;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"=
+><p class=3D"MsoNormal" align=3D"center" style=3D"text-align:center"><span =
+style=3D"color:black">1754<o:p></o:p></span></p></td><td width=3D"56" nowra=
+p=3D"" style=3D"width:42.0pt;border-top:none;border-left:none;border-bottom=
+:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;padding:0cm 5.4=
+pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNormal" align=3D"center" style=
+=3D"text-align:center"><span style=3D"color:black">0<o:p></o:p></span></p><=
+/td><td width=3D"56" nowrap=3D"" style=3D"width:42.0pt;border-top:none;bord=
+er-left:none;border-bottom:solid windowtext 1.0pt;border-right:solid window=
+text 1.0pt;background:#FFE699;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p=
+ class=3D"MsoNormal" align=3D"center" style=3D"text-align:center"><span sty=
+le=3D"color:black">1754<o:p></o:p></span></p></td><td width=3D"58" nowrap=
+=3D"" style=3D"width:43.5pt;border-top:none;border-left:none;border-bottom:=
+solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;background:#FFE6=
+99;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNormal" align=
+=3D"center" style=3D"text-align:center"><span style=3D"color:black">1754<o:=
+p></o:p></span></p></td></tr><tr style=3D"height:15.0pt"><td width=3D"123" =
+nowrap=3D"" style=3D"width:92.0pt;border:solid windowtext 1.0pt;border-top:=
+none;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNormal" alig=
+n=3D"center" style=3D"text-align:center"><span style=3D"color:black">552013=
+6<o:p></o:p></span></p></td><td width=3D"249" nowrap=3D"" style=3D"width:18=
+7.0pt;border-top:none;border-left:none;border-bottom:solid windowtext 1.0pt=
+;border-right:solid windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:15.=
+0pt"><p class=3D"MsoNormal">DM Gel 60<span style=3D"color:black"><o:p></o:p=
+></span></p></td><td width=3D"60" nowrap=3D"" style=3D"width:44.65pt;border=
+-top:none;border-left:none;border-bottom:solid windowtext 1.0pt;border-righ=
+t:solid windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p clas=
+s=3D"MsoNormal">M<span style=3D"color:black"><o:p></o:p></span></p></td><td=
+ width=3D"43" nowrap=3D"" style=3D"width:32.0pt;border-top:none;border-left=
+:none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.=
+0pt;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNormal" align=
+=3D"center" style=3D"text-align:center"><span style=3D"color:black">1<o:p><=
+/o:p></span></p></td><td width=3D"52" nowrap=3D"" style=3D"width:38.8pt;bor=
+der:none;border-bottom:solid windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;h=
+eight:15.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align:c=
+enter"><span style=3D"color:black">2651<o:p></o:p></span></p></td><td width=
+=3D"60" nowrap=3D"" style=3D"width:44.8pt;border:solid windowtext 1.0pt;bor=
+der-top:none;background:#FCE4D6;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt">=
+<p class=3D"MsoNormal" align=3D"center" style=3D"text-align:center"><span s=
+tyle=3D"color:black">0<o:p></o:p></span></p></td><td width=3D"61" nowrap=3D=
+"" style=3D"width:45.6pt;border-top:none;border-left:none;border-bottom:sol=
+id windowtext 1.0pt;border-right:solid windowtext 1.0pt;background:#FFE699;=
+padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNormal" align=3D"=
+center" style=3D"text-align:center"><span style=3D"color:black">45067<o:p><=
+/o:p></span></p></td><td width=3D"56" nowrap=3D"" style=3D"width:42.0pt;bor=
+der-top:none;border-left:none;border-bottom:solid windowtext 1.0pt;border-r=
+ight:solid windowtext 1.0pt;background:#FCE4D6;padding:0cm 5.4pt 0cm 5.4pt;=
+height:15.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align:=
+center"><span style=3D"color:black">0<o:p></o:p></span></p></td><td width=
+=3D"56" nowrap=3D"" style=3D"width:42.35pt;border-top:none;border-left:none=
+;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;b=
+ackground:#FFE699;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"Ms=
+oNormal" align=3D"center" style=3D"text-align:center"><span style=3D"color:=
+black">21208<o:p></o:p></span></p></td><td width=3D"60" nowrap=3D"" style=
+=3D"width:45.0pt;border-top:none;border-left:none;border-bottom:solid windo=
+wtext 1.0pt;border-right:solid windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt=
+;height:15.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align=
+:center"><span style=3D"color:black">0<o:p></o:p></span></p></td><td width=
+=3D"56" nowrap=3D"" style=3D"width:42.0pt;border-top:none;border-left:none;=
+border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;ba=
+ckground:#FFE699;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"Mso=
+Normal" align=3D"center" style=3D"text-align:center"><span style=3D"color:b=
+lack">26510<o:p></o:p></span></p></td><td width=3D"57" nowrap=3D"" style=3D=
+"width:42.9pt;border-top:none;border-left:none;border-bottom:solid windowte=
+xt 1.0pt;border-right:solid windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;he=
+ight:15.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align:ce=
+nter"><span style=3D"color:black">0<o:p></o:p></span></p></td><td width=3D"=
+56" nowrap=3D"" style=3D"width:42.0pt;border-top:none;border-left:none;bord=
+er-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;backgr=
+ound:#FFE699;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNorm=
+al" align=3D"center" style=3D"text-align:center"><span style=3D"color:black=
+">26510<o:p></o:p></span></p></td><td width=3D"56" nowrap=3D"" style=3D"wid=
+th:42.0pt;border-top:none;border-left:none;border-bottom:solid windowtext 1=
+.0pt;border-right:solid windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height=
+:15.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align:center=
+"><span style=3D"color:black">0<o:p></o:p></span></p></td><td width=3D"56" =
+nowrap=3D"" style=3D"width:42.0pt;border-top:none;border-left:none;border-b=
+ottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;padding:0c=
+m 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNormal" align=3D"center" st=
+yle=3D"text-align:center"><span style=3D"color:black">0<o:p></o:p></span></=
+p></td><td width=3D"58" nowrap=3D"" style=3D"width:43.5pt;border-top:none;b=
+order-left:none;border-bottom:solid windowtext 1.0pt;border-right:solid win=
+dowtext 1.0pt;background:#FFE699;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"=
+><p class=3D"MsoNormal" align=3D"center" style=3D"text-align:center"><span =
+style=3D"color:black">26510<o:p></o:p></span></p></td></tr><tr style=3D"hei=
+ght:15.0pt"><td width=3D"123" nowrap=3D"" style=3D"width:92.0pt;border:soli=
+d windowtext 1.0pt;border-top:none;padding:0cm 5.4pt 0cm 5.4pt;height:15.0p=
+t"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align:center"><spa=
+n style=3D"color:black">5520138<o:p></o:p></span></p></td><td width=3D"249"=
+ nowrap=3D"" style=3D"width:187.0pt;border-top:none;border-left:none;border=
+-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;padding:=
+0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNormal">DM Gel 90<span st=
+yle=3D"color:black"><o:p></o:p></span></p></td><td width=3D"60" nowrap=3D""=
+ style=3D"width:44.65pt;border-top:none;border-left:none;border-bottom:soli=
+d windowtext 1.0pt;border-right:solid windowtext 1.0pt;padding:0cm 5.4pt 0c=
+m 5.4pt;height:15.0pt"><p class=3D"MsoNormal">M<span style=3D"color:black">=
+<o:p></o:p></span></p></td><td width=3D"43" nowrap=3D"" style=3D"width:32.0=
+pt;border-top:none;border-left:none;border-bottom:solid windowtext 1.0pt;bo=
+rder-right:solid windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt=
+"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align:center"><span=
+ style=3D"color:black">1<o:p></o:p></span></p></td><td width=3D"52" nowrap=
+=3D"" style=3D"width:38.8pt;border:none;border-bottom:solid windowtext 1.0p=
+t;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNormal" align=
+=3D"center" style=3D"text-align:center"><span style=3D"color:black">1754<o:=
+p></o:p></span></p></td><td width=3D"60" nowrap=3D"" style=3D"width:44.8pt;=
+border:solid windowtext 1.0pt;border-top:none;background:#FCE4D6;padding:0c=
+m 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNormal" align=3D"center" st=
+yle=3D"text-align:center"><span style=3D"color:black">0<o:p></o:p></span></=
+p></td><td width=3D"61" nowrap=3D"" style=3D"width:45.6pt;border-top:none;b=
+order-left:none;border-bottom:solid windowtext 1.0pt;border-right:solid win=
+dowtext 1.0pt;background:#FFE699;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"=
+><p class=3D"MsoNormal" align=3D"center" style=3D"text-align:center"><span =
+style=3D"color:black">1754<o:p></o:p></span></p></td><td width=3D"56" nowra=
+p=3D"" style=3D"width:42.0pt;border-top:none;border-left:none;border-bottom=
+:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;background:#FCE=
+4D6;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNormal" align=
+=3D"center" style=3D"text-align:center"><span style=3D"color:black">0<o:p><=
+/o:p></span></p></td><td width=3D"56" nowrap=3D"" style=3D"width:42.35pt;bo=
+rder-top:none;border-left:none;border-bottom:solid windowtext 1.0pt;border-=
+right:solid windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p =
+class=3D"MsoNormal" align=3D"center" style=3D"text-align:center"><span styl=
+e=3D"color:black">0<o:p></o:p></span></p></td><td width=3D"60" nowrap=3D"" =
+style=3D"width:45.0pt;border-top:none;border-left:none;border-bottom:solid =
+windowtext 1.0pt;border-right:solid windowtext 1.0pt;padding:0cm 5.4pt 0cm =
+5.4pt;height:15.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-=
+align:center"><span style=3D"color:black">0<o:p></o:p></span></p></td><td w=
+idth=3D"56" nowrap=3D"" style=3D"width:42.0pt;border-top:none;border-left:n=
+one;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0p=
+t;background:#FFE699;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D=
+"MsoNormal" align=3D"center" style=3D"text-align:center"><span style=3D"col=
+or:black">1754<o:p></o:p></span></p></td><td width=3D"57" nowrap=3D"" style=
+=3D"width:42.9pt;border-top:none;border-left:none;border-bottom:solid windo=
+wtext 1.0pt;border-right:solid windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt=
+;height:15.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align=
+:center"><span style=3D"color:black">0<o:p></o:p></span></p></td><td width=
+=3D"56" nowrap=3D"" style=3D"width:42.0pt;border-top:none;border-left:none;=
+border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;pa=
+dding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNormal" align=3D"ce=
+nter" style=3D"text-align:center"><span style=3D"color:black">0<o:p></o:p><=
+/span></p></td><td width=3D"56" nowrap=3D"" style=3D"width:42.0pt;border-to=
+p:none;border-left:none;border-bottom:solid windowtext 1.0pt;border-right:s=
+olid windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=
+=3D"MsoNormal" align=3D"center" style=3D"text-align:center"><span style=3D"=
+color:black">0<o:p></o:p></span></p></td><td width=3D"56" nowrap=3D"" style=
+=3D"width:42.0pt;border-top:none;border-left:none;border-bottom:solid windo=
+wtext 1.0pt;border-right:solid windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt=
+;height:15.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align=
+:center"><span style=3D"color:black">0<o:p></o:p></span></p></td><td width=
+=3D"58" nowrap=3D"" style=3D"width:43.5pt;border-top:none;border-left:none;=
+border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;ba=
+ckground:#FFE699;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"Mso=
+Normal" align=3D"center" style=3D"text-align:center"><span style=3D"color:b=
+lack">1754<o:p></o:p></span></p></td></tr><tr style=3D"height:15.0pt"><td w=
+idth=3D"123" nowrap=3D"" style=3D"width:92.0pt;border:solid windowtext 1.0p=
+t;border-top:none;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"Ms=
+oNormal" align=3D"center" style=3D"text-align:center"><span style=3D"color:=
+black">5515988<o:p></o:p></span></p></td><td width=3D"249" nowrap=3D"" styl=
+e=3D"width:187.0pt;border-top:none;border-left:none;border-bottom:solid win=
+dowtext 1.0pt;border-right:solid windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4=
+pt;height:15.0pt"><p class=3D"MsoNormal">A 15gm<span style=3D"color:black">=
+<o:p></o:p></span></p></td><td width=3D"60" nowrap=3D"" style=3D"width:44.6=
+5pt;border-top:none;border-left:none;border-bottom:solid windowtext 1.0pt;b=
+order-right:solid windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:15.0p=
+t"><p class=3D"MsoNormal">T<span style=3D"color:black"><o:p></o:p></span></=
+p></td><td width=3D"43" nowrap=3D"" style=3D"width:32.0pt;border-top:none;b=
+order-left:none;border-bottom:solid windowtext 1.0pt;border-right:solid win=
+dowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNor=
+mal" align=3D"center" style=3D"text-align:center"><span style=3D"color:blac=
+k">1<o:p></o:p></span></p></td><td width=3D"52" nowrap=3D"" style=3D"width:=
+38.8pt;border:none;border-bottom:solid windowtext 1.0pt;padding:0cm 5.4pt 0=
+cm 5.4pt;height:15.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"te=
+xt-align:center"><span style=3D"color:black">12667<o:p></o:p></span></p></t=
+d><td width=3D"60" nowrap=3D"" style=3D"width:44.8pt;border:solid windowtex=
+t 1.0pt;border-top:none;background:#FCE4D6;padding:0cm 5.4pt 0cm 5.4pt;heig=
+ht:15.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align:cent=
+er"><span style=3D"color:black"> <o:p></o:p></span></p></td><td width=3D"61=
+" nowrap=3D"" style=3D"width:45.6pt;border-top:none;border-left:none;border=
+-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;backgrou=
+nd:#FCE4D6;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNormal=
+" align=3D"center" style=3D"text-align:center"><span style=3D"color:black">=
+ <o:p></o:p></span></p></td><td width=3D"56" nowrap=3D"" style=3D"width:42.=
+0pt;border-top:none;border-left:none;border-bottom:solid windowtext 1.0pt;b=
+order-right:solid windowtext 1.0pt;background:#C6E0B4;padding:0cm 5.4pt 0cm=
+ 5.4pt;height:15.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text=
+-align:center"><span style=3D"color:black">25334<o:p></o:p></span></p></td>=
+<td width=3D"56" nowrap=3D"" style=3D"width:42.35pt;border-top:none;border-=
+left:none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtex=
+t 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNormal" a=
+lign=3D"center" style=3D"text-align:center"><span style=3D"color:black"> <o=
+:p></o:p></span></p></td><td width=3D"60" nowrap=3D"" style=3D"width:45.0pt=
+;border-top:none;border-left:none;border-bottom:solid windowtext 1.0pt;bord=
+er-right:solid windowtext 1.0pt;background:#FFE699;padding:0cm 5.4pt 0cm 5.=
+4pt;height:15.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-al=
+ign:center"><span style=3D"color:black">12667<o:p></o:p></span></p></td><td=
+ width=3D"56" nowrap=3D"" style=3D"width:42.0pt;border-top:none;border-left=
+:none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.=
+0pt;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNormal" align=
+=3D"center" style=3D"text-align:center"><span style=3D"color:black">0<o:p><=
+/o:p></span></p></td><td width=3D"57" nowrap=3D"" style=3D"width:42.9pt;bor=
+der-top:none;border-left:none;border-bottom:solid windowtext 1.0pt;border-r=
+ight:solid windowtext 1.0pt;background:#FFE699;padding:0cm 5.4pt 0cm 5.4pt;=
+height:15.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align:=
+center"><span style=3D"color:black">12667<o:p></o:p></span></p></td><td wid=
+th=3D"56" nowrap=3D"" style=3D"width:42.0pt;border-top:none;border-left:non=
+e;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;=
+padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"MsoNormal" align=3D"=
+center" style=3D"text-align:center"><span style=3D"color:black">0<o:p></o:p=
+></span></p></td><td width=3D"56" nowrap=3D"" style=3D"width:42.0pt;border-=
+top:none;border-left:none;border-bottom:solid windowtext 1.0pt;border-right=
+:solid windowtext 1.0pt;background:#FFE699;padding:0cm 5.4pt 0cm 5.4pt;heig=
+ht:15.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align:cent=
+er"><span style=3D"color:black">12667<o:p></o:p></span></p></td><td width=
+=3D"56" nowrap=3D"" style=3D"width:42.0pt;border-top:none;border-left:none;=
+border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;ba=
+ckground:#FFE699;padding:0cm 5.4pt 0cm 5.4pt;height:15.0pt"><p class=3D"Mso=
+Normal" align=3D"center" style=3D"text-align:center"><span style=3D"color:b=
+lack">12667<o:p></o:p></span></p></td><td width=3D"58" nowrap=3D"" style=3D=
+"width:43.5pt;border-top:none;border-left:none;border-bottom:solid windowte=
+xt 1.0pt;border-right:solid windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;he=
+ight:15.0pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align:ce=
+nter"><span style=3D"color:black">0<o:p></o:p></span></p></td></tr><tr styl=
+e=3D"height:15.75pt"><td width=3D"123" nowrap=3D"" style=3D"width:92.0pt;bo=
+rder:solid windowtext 1.0pt;border-top:none;padding:0cm 5.4pt 0cm 5.4pt;hei=
+ght:15.75pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align:ce=
+nter"><span style=3D"color:black">5515989<o:p></o:p></span></p></td><td wid=
+th=3D"249" nowrap=3D"" style=3D"width:187.0pt;border-top:none;border-left:n=
+one;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0p=
+t;padding:0cm 5.4pt 0cm 5.4pt;height:15.75pt"><p class=3D"MsoNormal"><span =
+style=3D"color:black">A</span> 30gm<span style=3D"color:black"><o:p></o:p><=
+/span></p></td><td width=3D"60" nowrap=3D"" style=3D"width:44.65pt;border-t=
+op:none;border-left:none;border-bottom:solid windowtext 1.0pt;border-right:=
+solid windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:15.75pt"><p class=
+=3D"MsoNormal">T<span style=3D"color:black"><o:p></o:p></span></p></td><td =
+width=3D"43" nowrap=3D"" style=3D"width:32.0pt;border-top:none;border-left:=
+none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0=
+pt;padding:0cm 5.4pt 0cm 5.4pt;height:15.75pt"><p class=3D"MsoNormal" align=
+=3D"center" style=3D"text-align:center"><span style=3D"color:black">1<o:p><=
+/o:p></span></p></td><td width=3D"52" nowrap=3D"" style=3D"width:38.8pt;bor=
+der:none;border-bottom:solid windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;h=
+eight:15.75pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align:=
+center"><span style=3D"color:black">6333<o:p></o:p></span></p></td><td widt=
+h=3D"60" nowrap=3D"" style=3D"width:44.8pt;border:solid windowtext 1.0pt;bo=
+rder-top:none;background:#FCE4D6;padding:0cm 5.4pt 0cm 5.4pt;height:15.75pt=
+"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align:center"><span=
+ style=3D"color:black"> <o:p></o:p></span></p></td><td width=3D"61" nowrap=
+=3D"" style=3D"width:45.6pt;border-top:none;border-left:none;border-bottom:=
+solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;background:#FCE4=
+D6;padding:0cm 5.4pt 0cm 5.4pt;height:15.75pt"><p class=3D"MsoNormal" align=
+=3D"center" style=3D"text-align:center"><span style=3D"color:black"> <o:p><=
+/o:p></span></p></td><td width=3D"56" nowrap=3D"" style=3D"width:42.0pt;bor=
+der-top:none;border-left:none;border-bottom:solid windowtext 1.0pt;border-r=
+ight:solid windowtext 1.0pt;background:#C6E0B4;padding:0cm 5.4pt 0cm 5.4pt;=
+height:15.75pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align=
+:center"><span style=3D"color:black">6333<o:p></o:p></span></p></td><td wid=
+th=3D"56" nowrap=3D"" style=3D"width:42.35pt;border-top:none;border-left:no=
+ne;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt=
+;padding:0cm 5.4pt 0cm 5.4pt;height:15.75pt"><p class=3D"MsoNormal" align=
+=3D"center" style=3D"text-align:center"><span style=3D"color:black"> <o:p><=
+/o:p></span></p></td><td width=3D"60" nowrap=3D"" style=3D"width:45.0pt;bor=
+der-top:none;border-left:none;border-bottom:solid windowtext 1.0pt;border-r=
+ight:solid windowtext 1.0pt;background:#FFE699;padding:0cm 5.4pt 0cm 5.4pt;=
+height:15.75pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align=
+:center"><span style=3D"color:black">6333<o:p></o:p></span></p></td><td wid=
+th=3D"56" nowrap=3D"" style=3D"width:42.0pt;border-top:none;border-left:non=
+e;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;=
+padding:0cm 5.4pt 0cm 5.4pt;height:15.75pt"><p class=3D"MsoNormal" align=3D=
+"center" style=3D"text-align:center"><span style=3D"color:black">0<o:p></o:=
+p></span></p></td><td width=3D"57" nowrap=3D"" style=3D"width:42.9pt;border=
+-top:none;border-left:none;border-bottom:solid windowtext 1.0pt;border-righ=
+t:solid windowtext 1.0pt;background:#FFE699;padding:0cm 5.4pt 0cm 5.4pt;hei=
+ght:15.75pt"><p class=3D"MsoNormal" align=3D"center" style=3D"text-align:ce=
+nter"><span style=3D"color:black">6333<o:p></o:p></span></p></td><td width=
+=3D"56" nowrap=3D"" style=3D"width:42.0pt;border-top:none;border-left:none;=
+border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;pa=
+dding:0cm 5.4pt 0cm 5.4pt;height:15.75pt"><p class=3D"MsoNormal" align=3D"c=
+enter" style=3D"text-align:center"><span style=3D"color:black">0<o:p></o:p>=
+</span></p></td><td width=3D"56" nowrap=3D"" style=3D"width:42.0pt;border-t=
+op:none;border-left:none;border-bottom:solid windowtext 1.0pt;border-right:=
+solid windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:15.75pt"><p class=
+=3D"MsoNormal" align=3D"center" style=3D"text-align:center"><span style=3D"=
+color:black">0<o:p></o:p></span></p></td><td width=3D"56" nowrap=3D"" style=
+=3D"width:42.0pt;border-top:none;border-left:none;border-bottom:solid windo=
+wtext 1.0pt;border-right:solid windowtext 1.0pt;background:#FFE699;padding:=
+0cm 5.4pt 0cm 5.4pt;height:15.75pt"><p class=3D"MsoNormal" align=3D"center"=
+ style=3D"text-align:center"><span style=3D"color:black">6333<o:p></o:p></s=
+pan></p></td><td width=3D"58" nowrap=3D"" style=3D"width:43.5pt;border-top:=
+none;border-left:none;border-bottom:solid windowtext 1.0pt;border-right:sol=
+id windowtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt;height:15.75pt"><p class=3D=
+"MsoNormal" align=3D"center" style=3D"text-align:center"><span style=3D"col=
+or:black">0<o:p></o:p></span></p></td></tr></tbody></table><p class=3D"MsoN=
+ormal"><span lang=3D"EN-US" style=3D"color:#1F497D"><o:p> </o:p></span></p>=
+</div></div></body></html>=
+
+------=_NextPart_000_0122_01DC4917.4E42D330--
