@@ -20,7 +20,7 @@ def converse_text(
 	bedrock,
 	user_text: str,
 	system_text: Optional[str] = None,
-	max_tokens: int = 2048,
+	max_tokens: int = 4096,
 	temperature: float = 0.0,
 	top_p: float = 0.9,
 ) -> str:
@@ -109,19 +109,6 @@ def converse_image(
 ) -> str:
 	# Resize if needed to meet model pixel limits
 	safe_fmt, safe_bytes = _shrink_image_to_max_pixels(image_bytes, image_format)
-
-	# Optionally persist the resized image for debugging
-	try:
-		if os.getenv("SAVE_RESIZED_IMAGES", "1") == "1":
-			out_dir = os.path.join(os.getcwd(), "resized_images")
-			os.makedirs(out_dir, exist_ok=True)
-			ts = int(time.time() * 1000)
-			outfile = os.path.join(out_dir, f"resized_{ts}.{safe_fmt}")
-			with open(outfile, "wb") as f:
-				f.write(safe_bytes)
-	except Exception:
-		# Do not fail inference if we can't write the file
-		pass
 
 	messages = [
 		{
