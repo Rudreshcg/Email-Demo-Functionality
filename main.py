@@ -599,60 +599,8 @@ def main(input_dir: str, out: str, region: str, dry_run: bool, max_files: int, i
 		print(df.to_string(index=False))
 	except Exception:
 		print(df.head().to_string(index=False))
-	
-	# Create pivot-style table for easier analysis
-	# Rows: customer_name, id, notes
-	# Columns: date (months)
-	# Values: sum of quantity
-	pivot_df = None
-	if "date" in df.columns and "quantity" in df.columns and len(df) > 0:
-		try:
-			# Ensure quantity is numeric
-			df["quantity"] = pd.to_numeric(df["quantity"], errors="coerce").fillna(0)
-			
-			# Group by customer_name, id, notes and pivot by date
-			pivot_df = df.pivot_table(
-				index=["customer_name", "id", "notes"],
-				columns="date",
-				values="quantity",
-				aggfunc="sum",
-				fill_value=0
-			)
-			
-			# Reset index to make customer_name, id, notes regular columns
-			pivot_df = pivot_df.reset_index()
-			
-			# Sort date columns chronologically
-			date_cols = [col for col in pivot_df.columns if col not in ["customer_name", "id", "notes"]]
-			# Convert date strings to datetime for sorting
-			def sort_key(col):
-				try:
-					if isinstance(col, str) and re.match(r"^\d{4}-\d{2}-\d{2}$", col):
-						return pd.to_datetime(col)
-					return pd.to_datetime("1900-01-01")  # Put non-date columns at end
-				except:
-					return pd.to_datetime("1900-01-01")
-			
-			date_cols_sorted = sorted(date_cols, key=sort_key)
-			pivot_df = pivot_df[["customer_name", "id", "notes"] + date_cols_sorted]
-			
-			print(f"\nCreated pivot table with {len(pivot_df)} rows and {len(date_cols_sorted)} date columns")
-		except Exception as e:
-			print(f"Warning: Could not create pivot table: {e}")
-			pivot_df = None
-	
-	# Write to Excel with multiple sheets
-	with pd.ExcelWriter(out, engine='openpyxl') as writer:
-		# Sheet 1: Original data (list format)
-		df.to_excel(writer, sheet_name='Data', index=False)
-		
-		# Sheet 2: Pivot table (if created)
-		if pivot_df is not None:
-			pivot_df.to_excel(writer, sheet_name='Pivot Table', index=False)
-	
+	df.to_excel(out, index=False)
 	print(f"Wrote {len(df)} rows -> {out}")
-	if pivot_df is not None:
-		print(f"Pivot table: {len(pivot_df)} rows × {len(pivot_df.columns)} columns")
 
 
 def handle_xlsx_file(path: str, bedrock, dry_run: bool) -> List[Dict[str, Any]]:
@@ -739,69 +687,58 @@ def handle_eml(path: str, bedrock, dry_run: bool, debug: bool = False) -> List[D
 			)
 			rows.extend(_sanitize_rows(text_rows, email_customer, "email-text", os.path.basename(path)))
 
-	# Process inline and attached images with error handling for timeouts
+	# Process inline and attached images
 	for (ext, img_bytes) in parsed.images:
-		try:
-			fmt = ext.lower()
-			if fmt == "jpg":
-				fmt = "jpeg"
-				
-			if dry_run:
-				rows.append({
-					"customer": email_customer,
-					"material": "",
-					"quantity": "",
-					"unit": "",
-					"delivery_date": "",
-					"urgency": "",
-					"notes": f"[image:{fmt}]",
-					"source": "email-image",
-					"source_file": os.path.basename(path),
-					"row_index": None,
-				})
+		fmt = ext.lower()
+		if fmt == "jpg":
+			fmt = "jpeg"
+			
+		if dry_run:
+			rows.append({
+				"customer": email_customer,
+				"material": "",
+				"quantity": "",
+				"unit": "",
+				"delivery_date": "",
+				"urgency": "",
+				"notes": f"[image:{fmt}]",
+				"source": "email-image",
+				"source_file": os.path.basename(path),
+				"row_index": None,
+			})
+		else:
+			# Try grid-first extraction for higher accuracy
+			grid = analyze_image_table_grid(
+				bedrock,
+				image_bytes=img_bytes,
+				image_format=fmt,
+				debug=debug,
+				context_text=f"From: {parsed.sender}\nSubject: {parsed.subject}\nDate: {parsed.date}"
+			)
+			if grid:
+				if debug:
+					print("[DEBUG] Grid extracted successfully, using grid expansion")
+				if debug:
+					print("[DEBUG] Running grid month correction...")
+				grid = correct_grid_months(bedrock, grid, debug=debug)
+				image_rows = expand_grid_to_requirements(grid, "email-image", os.path.basename(path), email_customer, debug=debug)
+				if debug:
+					print(f"[DEBUG] Grid expansion returned {len(image_rows)} rows")
 			else:
-				# Try grid-first extraction for higher accuracy
-				grid = analyze_image_table_grid(
+				if debug:
+					print("[DEBUG] Grid extraction failed, falling back to raw image extraction")
+				image_rows = analyze_image_requirements(
 					bedrock,
 					image_bytes=img_bytes,
 					image_format=fmt,
+					source="email-image",
+					source_file=os.path.basename(path),
 					debug=debug,
 					context_text=f"From: {parsed.sender}\nSubject: {parsed.subject}\nDate: {parsed.date}"
 				)
-				if grid:
-					if debug:
-						print("[DEBUG] Grid extracted successfully, using grid expansion")
-					if debug:
-						print("[DEBUG] Running grid month correction...")
-					grid = correct_grid_months(bedrock, grid, debug=debug)
-					image_rows = expand_grid_to_requirements(grid, "email-image", os.path.basename(path), email_customer, debug=debug)
-					if debug:
-						print(f"[DEBUG] Grid expansion returned {len(image_rows)} rows")
-				else:
-					if debug:
-						print("[DEBUG] Grid extraction failed, falling back to raw image extraction")
-					image_rows = analyze_image_requirements(
-						bedrock,
-						image_bytes=img_bytes,
-						image_format=fmt,
-						source="email-image",
-						source_file=os.path.basename(path),
-						debug=debug,
-						context_text=f"From: {parsed.sender}\nSubject: {parsed.subject}\nDate: {parsed.date}"
-					)
-					if debug:
-						print(f"[DEBUG] Raw image extraction returned {len(image_rows)} rows")
-				rows.extend(_sanitize_rows(image_rows, email_customer, "email-image", os.path.basename(path)))
-		except Exception as e:
-			error_msg = str(e)
-			if "timeout" in error_msg.lower() or "Read timeout" in error_msg:
-				print(f"Warning: Timeout processing image in {os.path.basename(path)}, skipping image. Error: {error_msg[:200]}")
-			else:
-				print(f"Warning: Error processing image in {os.path.basename(path)}, skipping image. Error: {error_msg[:200]}")
-			if debug:
-				import traceback
-				print(f"[DEBUG] Full error traceback:\n{traceback.format_exc()}")
-			continue  # Continue processing other images/emails
+				if debug:
+					print(f"[DEBUG] Raw image extraction returned {len(image_rows)} rows")
+			rows.extend(_sanitize_rows(image_rows, email_customer, "email-image", os.path.basename(path)))
 
 	# Process xlsx attachments - use direct extraction to avoid LLM date mapping errors
 	for (filename, xbytes) in parsed.xlsx_attachments:
@@ -923,65 +860,54 @@ def handle_eml_bytes(raw_bytes: bytes, label: str, bedrock, dry_run: bool, debug
 			rows.extend(_sanitize_rows(text_rows, email_customer, "email-text", f"{label}"))
 
 	for (ext, img_bytes) in parsed.images:
-		try:
-			fmt = ext.lower()
-			if fmt == "jpg":
-				fmt = "jpeg"
-			if dry_run:
-				rows.append({
-					"customer": email_customer,
-					"material": "",
-					"quantity": "",
-					"unit": "",
-					"delivery_date": "",
-					"urgency": "",
-					"notes": f"[image:{fmt}]",
-					"source": "email-image",
-					"source_file": f"{label}",
-					"row_index": None,
-				})
+		fmt = ext.lower()
+		if fmt == "jpg":
+			fmt = "jpeg"
+		if dry_run:
+			rows.append({
+				"customer": email_customer,
+				"material": "",
+				"quantity": "",
+				"unit": "",
+				"delivery_date": "",
+				"urgency": "",
+				"notes": f"[image:{fmt}]",
+				"source": "email-image",
+				"source_file": f"{label}",
+				"row_index": None,
+			})
+		else:
+			grid = analyze_image_table_grid(
+				bedrock,
+				image_bytes=img_bytes,
+				image_format=fmt,
+				debug=debug,
+				context_text=f"From: {parsed.sender}\nSubject: {parsed.subject}\nDate: {parsed.date}"
+			)
+			if grid:
+				if debug:
+					print("[DEBUG] Grid extracted successfully, using grid expansion")
+				if debug:
+					print("[DEBUG] Running grid month correction...")
+				grid = correct_grid_months(bedrock, grid, debug=debug)
+				image_rows = expand_grid_to_requirements(grid, "email-image", f"{label}", email_customer, debug=debug)
+				if debug:
+					print(f"[DEBUG] Grid expansion returned {len(image_rows)} rows")
 			else:
-				grid = analyze_image_table_grid(
+				if debug:
+					print("[DEBUG] Grid extraction failed, falling back to raw image extraction")
+				image_rows = analyze_image_requirements(
 					bedrock,
 					image_bytes=img_bytes,
 					image_format=fmt,
+					source="email-image",
+					source_file=f"{label}",
 					debug=debug,
 					context_text=f"From: {parsed.sender}\nSubject: {parsed.subject}\nDate: {parsed.date}"
 				)
-				if grid:
-					if debug:
-						print("[DEBUG] Grid extracted successfully, using grid expansion")
-					if debug:
-						print("[DEBUG] Running grid month correction...")
-					grid = correct_grid_months(bedrock, grid, debug=debug)
-					image_rows = expand_grid_to_requirements(grid, "email-image", f"{label}", email_customer, debug=debug)
-					if debug:
-						print(f"[DEBUG] Grid expansion returned {len(image_rows)} rows")
-				else:
-					if debug:
-						print("[DEBUG] Grid extraction failed, falling back to raw image extraction")
-					image_rows = analyze_image_requirements(
-						bedrock,
-						image_bytes=img_bytes,
-						image_format=fmt,
-						source="email-image",
-						source_file=f"{label}",
-						debug=debug,
-						context_text=f"From: {parsed.sender}\nSubject: {parsed.subject}\nDate: {parsed.date}"
-					)
-					if debug:
-						print(f"[DEBUG] Raw image extraction returned {len(image_rows)} rows")
-				rows.extend(_sanitize_rows(image_rows, email_customer, "email-image", f"{label}"))
-		except Exception as e:
-			error_msg = str(e)
-			if "timeout" in error_msg.lower() or "Read timeout" in error_msg:
-				print(f"Warning: Timeout processing image in {label}, skipping image. Error: {error_msg[:200]}")
-			else:
-				print(f"Warning: Error processing image in {label}, skipping image. Error: {error_msg[:200]}")
-			if debug:
-				import traceback
-				print(f"[DEBUG] Full error traceback:\n{traceback.format_exc()}")
-			continue  # Continue processing other images/emails
+				if debug:
+					print(f"[DEBUG] Raw image extraction returned {len(image_rows)} rows")
+			rows.extend(_sanitize_rows(image_rows, email_customer, "email-image", f"{label}"))
 
 	for (filename, xbytes) in parsed.xlsx_attachments:
 		try:
