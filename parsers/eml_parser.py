@@ -102,12 +102,6 @@ def _parse_msg(msg, source_label: str) -> ParsedEmail:
 	return parsed
 
 
-def parse_eml_file(path: str) -> ParsedEmail:
-	with open(path, "rb") as f:
-		msg = BytesParser(policy=policy.default).parse(f)
-	return _parse_msg(msg, source_label=path)
-
-
 def parse_eml_bytes(raw_bytes: bytes, source_label: str = "imap") -> ParsedEmail:
 	msg = BytesParser(policy=policy.default).parsebytes(raw_bytes)
 	return _parse_msg(msg, source_label=source_label)

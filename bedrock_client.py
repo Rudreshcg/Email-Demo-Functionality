@@ -13,7 +13,14 @@ IMAGE_MODEL_ARN = "arn:aws:bedrock:us-east-1:127214171089:inference-profile/us.m
 
 
 def get_bedrock_client(region: str = "us-east-1"):
-	return boto3.client("bedrock-runtime", region_name=region)
+	# Increase timeout for image processing which can take longer
+	from botocore.config import Config
+	config = Config(
+		read_timeout=240,  # 2 minutes for image processing
+		connect_timeout=10,  # 10 seconds for connection
+		retries={'max_attempts': 2}  # Retry up to 2 times
+	)
+	return boto3.client("bedrock-runtime", region_name=region, config=config)
 
 
 def converse_text(

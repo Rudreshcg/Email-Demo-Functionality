@@ -9,14 +9,13 @@ import click
 import pandas as pd
 
 from bedrock_client import get_bedrock_client
-from parsers.eml_parser import parse_eml_file, parse_eml_bytes
+from parsers.eml_parser import parse_eml_bytes
 from parsers.xlsx_parser import read_xlsx_file, read_xlsx_bytes
 from analysis import analyze_text_requirements, analyze_image_requirements, analyze_image_table_grid, expand_grid_to_requirements, correct_grid_months, refine_projection_with_image
 from ingest.imap_fetcher import fetch_emails
 
 
 SUPPORTED_XLSX_EXTS = {".xlsx"}
-SUPPORTED_EML_EXTS = {".eml"}
 
 # Target email address for order aggregation
 TARGET_EMAIL = "orderaggregationdemo@gmail.com"
@@ -24,10 +23,6 @@ TARGET_EMAIL = "orderaggregationdemo@gmail.com"
 
 def is_xlsx_file(path: str) -> bool:
 	return os.path.splitext(path)[1].lower() in SUPPORTED_XLSX_EXTS
-
-
-def is_eml_file(path: str) -> bool:
-	return os.path.splitext(path)[1].lower() in SUPPORTED_EML_EXTS
 
 
 def should_process_email(parsed_email) -> bool:
@@ -234,7 +229,7 @@ def _extract_requirements_from_excel_row(rec: Dict[str, Any], bedrock, customer:
                 other_cols[str(k).strip()] = v
     
     # Extract material code from other columns
-    id_candidates = ["Item Code", "Item Number", "Item", "SKU", "Material", "Code", "Part #", "Part Number", "Supplier Part #", "Item Code"]
+    id_candidates = ["Product Number", "Product ID", "Item Code", "Item Number", "Item", "SKU", "Material", "Code", "Part #", "Part Number", "Supplier Part #", "Product Code"]
     material = ""
     for col_name in id_candidates:
         for k, v in other_cols.items():
@@ -334,7 +329,7 @@ def _extract_requirements_from_excel_row(rec: Dict[str, Any], bedrock, customer:
     
     # Extract unit if available
     unit = ""
-    unit_candidates = ["Unit", "Units", "UOM", "Batch size", "Pack Size"]
+    unit_candidates = ["Unit of Measure", "Unit", "Units", "UOM", "Batch size", "Pack Size"]
     for col_name in unit_candidates:
         for k, v in other_cols.items():
             if col_name.lower() in k.lower():
@@ -344,8 +339,67 @@ def _extract_requirements_from_excel_row(rec: Dict[str, Any], bedrock, customer:
         if unit:
             break
     
-    # Extract requirements from month columns
+    # Check if we have "Delivery Date" and "Receipt Quantity" columns (one row per Excel row)
+    delivery_date_col = None
+    receipt_quantity_col = None
+    
+    for k in other_cols.keys():
+        k_lower = str(k).strip().lower()
+        if "delivery date" in k_lower:
+            delivery_date_col = k
+        if "receipt quantity" in k_lower:
+            receipt_quantity_col = k
+    
     requirements = []
+    
+    # If we have Delivery Date and Receipt Quantity columns, extract one requirement per row
+    if delivery_date_col and receipt_quantity_col:
+        delivery_date_val = str(other_cols.get(delivery_date_col, "")).strip()
+        receipt_quantity_val = str(other_cols.get(receipt_quantity_col, "")).strip()
+        
+        if delivery_date_val and receipt_quantity_val:
+            # Extract numeric quantity from "Receipt Quantity" (e.g., "1 PCE" -> 1)
+            qty_str = receipt_quantity_val
+            # Try to extract numeric part
+            qty_match = _re.search(r"(\d+(?:\.\d+)?)", qty_str)
+            if qty_match:
+                qty = _coerce_number(qty_match.group(1))
+            else:
+                qty = _coerce_number(receipt_quantity_val)
+            
+            # If unit wasn't found in "Unit of Measure", try to extract from "Receipt Quantity"
+            if not unit and receipt_quantity_val:
+                unit_match = _re.search(r"\d+\s*([A-Za-z]+)", receipt_quantity_val)
+                if unit_match:
+                    unit = unit_match.group(1).strip()
+            
+            if qty > 0:
+                # Convert date to ISO format
+                delivery_date_iso = delivery_date_val
+                # Try to convert date formats like "01-Mar-25" to ISO
+                if _re.match(r"\d{2}-[A-Za-z]{3}-\d{2}", delivery_date_val):
+                    delivery_date_iso = _month_label_to_iso(delivery_date_val)
+                elif not _re.match(r"^\d{4}-\d{2}-\d{2}$", delivery_date_val):
+                    # Try other date formats
+                    delivery_date_iso = _month_label_to_iso(delivery_date_val)
+                
+                requirements.append({
+                    "customer": final_customer,
+                    "material": material,
+                    "quantity": qty,
+                    "unit": unit,
+                    "delivery_date": delivery_date_iso,
+                    "urgency": "",
+                    "description": description,
+                    "notes": final_notes,
+                    "source": source,
+                    "source_file": source_file,
+                    "row_index": row_idx,
+                })
+                if debug:
+                    print(f"[DEBUG] Row {row_idx}: Extracted requirement - material={material}, quantity={qty}, unit={unit}, delivery_date={delivery_date_iso}")
+    
+    # Also extract requirements from month columns (if any)
     for month_col, qty_val in month_cols:
         qty = _coerce_number(qty_val)
         if qty <= 0:
@@ -367,6 +421,8 @@ def _extract_requirements_from_excel_row(rec: Dict[str, Any], bedrock, customer:
             "source_file": source_file,
             "row_index": row_idx,
         })
+        if debug:
+            print(f"[DEBUG] Row {row_idx}: Extracted requirement from month column - material={material}, quantity={qty}, month={month_col}, delivery_date={delivery_date}")
     
     return requirements
 
@@ -438,7 +494,7 @@ def _sanitize_rows(rows: List[Dict[str, Any]], customer: str, source: str, sourc
 
 
 @click.command()
-@click.option("--input-dir", required=False, default=None, type=click.Path(exists=True, file_okay=False), help="Folder containing .eml and .xlsx files")
+@click.option("--input-dir", required=False, default=None, type=click.Path(exists=True, file_okay=False), help="Folder containing .xlsx files")
 @click.option("--out", required=False, default="requirements_output.xlsx", type=click.Path(dir_okay=False), help="Output Excel path")
 @click.option("--region", required=False, default="us-east-1", help="AWS region")
 @click.option("--dry-run", is_flag=True, help="Do not call Bedrock; only parse")
@@ -487,13 +543,7 @@ def main(input_dir: str, out: str, region: str, dry_run: bool, max_files: int, i
 				break
 			if os.path.isdir(path):
 				continue
-			if is_eml_file(path):
-				print(f"FILES: parsing email {os.path.basename(path)}")
-				rows = handle_eml(path, bedrock, dry_run, debug)
-				print(f"FILES: {os.path.basename(path)} -> extracted {len(rows)} row(s)")
-				all_rows.extend(rows)
-				processed += 1
-			elif is_xlsx_file(path):
+			if is_xlsx_file(path):
 				print(f"FILES: parsing xlsx {os.path.basename(path)}")
 				rows = handle_xlsx_file(path, bedrock, dry_run)
 				print(f"FILES: {os.path.basename(path)} -> extracted {len(rows)} row(s)")
@@ -632,176 +682,7 @@ def handle_xlsx_file(path: str, bedrock, dry_run: bool) -> List[Dict[str, Any]]:
 	return all_requirements
 
 
-def handle_eml(path: str, bedrock, dry_run: bool, debug: bool = False) -> List[Dict[str, Any]]:
-	parsed = parse_eml_file(path)
-	
-	# Filter: Only process emails sent to TARGET_EMAIL
-	if not should_process_email(parsed):
-		if debug:
-			print(f"EMAIL FILE: SKIPPED - not sent to {TARGET_EMAIL}. Recipients: {parsed.recipients}")
-		return []
-	
-	# Extract customer name from email (subject/body) - priority over sender
-	email_customer = _extract_customer_from_email(parsed)
-	if not email_customer:
-		email_customer = parsed.sender  # Fallback to sender if not found
-	
-	rows: List[Dict[str, Any]] = []
-	if debug:
-		print(f"EMAIL FILE: subject={parsed.subject} from={parsed.sender} recipients={parsed.recipients} images={len(parsed.images)} xlsx={len(parsed.xlsx_attachments)}")
-		if email_customer != parsed.sender:
-			print(f"[DEBUG] Extracted customer from email: {email_customer} (instead of sender: {parsed.sender})")
-
-	meta_header = f"Subject: {parsed.subject}\nFrom: {parsed.sender}\nDate: {parsed.date}\n"
-	full_text = "\n\n".join([meta_header, parsed.plain_text, parsed.html_text]).strip()
-
-	if full_text:
-		if dry_run:
-			rows.append({
-				"customer": email_customer,
-				"material": "",
-				"quantity": "",
-				"unit": "",
-				"delivery_date": "",
-				"urgency": "",
-				"notes": full_text[:5000],
-				"source": "email-text",
-				"source_file": os.path.basename(path),
-				"row_index": None,
-			})
-		else:
-			text_rows = analyze_text_requirements(
-				bedrock,
-				user_text=full_text,
-				system_text=(
-					"Extract requirements from an email. Capture customer name (if found in the row data), material ID (product ID/code/SKU), quantity, unit, delivery date, description (product/item description if available), and notes. "
-					"CRITICAL: Do NOT extract generic phrases like 'Material Requirements', 'Customer Material Requirements', 'Requirements', 'Material', 'Excel attachment', 'Table', 'Table as image', 'Format', 'Image', 'Attachment', 'Test', 'Welcome', 'Hey' as customer names. "
-					"Only extract actual company/customer names that look like real business names (e.g., 'ABC Pvt Ltd', 'Cipla', 'ENCUBE ETHICALS PVT LTD', 'GSK', 'John Doe Company'). "
-					"A valid customer name should: (1) contain letters, (2) look like a company/person name (not a generic word), (3) may contain company indicators like 'Pvt Ltd', 'Inc', 'Corp', etc. "
-					"If you cannot find a valid customer/company name that looks real, leave the customer field empty (it will be filled from email sender). "
-					"Do NOT extract header rows or rows that are just customer names without material/quantity data."
-				),
-				source="email-text",
-				source_file=os.path.basename(path),
-				debug=debug,
-			)
-			rows.extend(_sanitize_rows(text_rows, email_customer, "email-text", os.path.basename(path)))
-
-	# Process inline and attached images
-	for (ext, img_bytes) in parsed.images:
-		fmt = ext.lower()
-		if fmt == "jpg":
-			fmt = "jpeg"
-			
-		if dry_run:
-			rows.append({
-				"customer": email_customer,
-				"material": "",
-				"quantity": "",
-				"unit": "",
-				"delivery_date": "",
-				"urgency": "",
-				"notes": f"[image:{fmt}]",
-				"source": "email-image",
-				"source_file": os.path.basename(path),
-				"row_index": None,
-			})
-		else:
-			# Try grid-first extraction for higher accuracy
-			grid = analyze_image_table_grid(
-				bedrock,
-				image_bytes=img_bytes,
-				image_format=fmt,
-				debug=debug,
-				context_text=f"From: {parsed.sender}\nSubject: {parsed.subject}\nDate: {parsed.date}"
-			)
-			if grid:
-				if debug:
-					print("[DEBUG] Grid extracted successfully, using grid expansion")
-				if debug:
-					print("[DEBUG] Running grid month correction...")
-				grid = correct_grid_months(bedrock, grid, debug=debug)
-				image_rows = expand_grid_to_requirements(grid, "email-image", os.path.basename(path), email_customer, debug=debug)
-				if debug:
-					print(f"[DEBUG] Grid expansion returned {len(image_rows)} rows")
-			else:
-				if debug:
-					print("[DEBUG] Grid extraction failed, falling back to raw image extraction")
-				image_rows = analyze_image_requirements(
-					bedrock,
-					image_bytes=img_bytes,
-					image_format=fmt,
-					source="email-image",
-					source_file=os.path.basename(path),
-					debug=debug,
-					context_text=f"From: {parsed.sender}\nSubject: {parsed.subject}\nDate: {parsed.date}"
-				)
-				if debug:
-					print(f"[DEBUG] Raw image extraction returned {len(image_rows)} rows")
-			rows.extend(_sanitize_rows(image_rows, email_customer, "email-image", os.path.basename(path)))
-
-	# Process xlsx attachments - use direct extraction to avoid LLM date mapping errors
-	for (filename, xbytes) in parsed.xlsx_attachments:
-		try:
-			records = read_xlsx_bytes(xbytes)
-		except Exception:
-			records = []
-		if not records:
-			continue
-
-		if dry_run:
-			text_blob = "\n".join([f"row={idx} " + ", ".join([f"{k}={v}" for k, v in rec.items() if v == v]) for idx, rec in enumerate(records)])
-			rows.append({
-				"customer": email_customer,
-				"material": "",
-				"quantity": "",
-				"unit": "",
-				"delivery_date": "",
-				"urgency": "",
-				"notes": text_blob[:5000],
-				"source": "email-xlsx",
-				"source_file": os.path.basename(filename or os.path.basename(path)),
-				"row_index": None,
-			})
-		else:
-			# Direct extraction: programmatically process month columns
-			# Track customer name across rows (for Excel files where customer name is in a different row)
-			last_customer = email_customer or parsed.sender or ""
-			if debug:
-				print(f"[DEBUG] Processing {len(records)} Excel rows from {filename or os.path.basename(path)}")
-				if records:
-					# Show first record's column names to debug header detection
-					first_rec = records[0]
-					import re as _re
-					month_pattern = _re.compile(r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-zA-Z\-']*\s?\d{2,4}$", _re.IGNORECASE)
-					all_cols = list(first_rec.keys())
-					month_cols = [c for c in all_cols if month_pattern.match(str(c).strip())]
-					print(f"[DEBUG] First record columns: {all_cols[:10]}... (total: {len(all_cols)})")
-					print(f"[DEBUG] Month columns found: {month_cols[:10]}... (total: {len(month_cols)})")
-			for idx, rec in enumerate(records):
-				# Check if this row has a customer name (but might not have material code)
-				customer_candidates = ["Customer", "Customer Name", "Company"]
-				row_customer = ""
-				for col_name in customer_candidates:
-					for k, v in rec.items():
-						if col_name.lower() in str(k).lower():
-							row_customer = str(v).strip() if v == v else ""
-							if row_customer:
-								last_customer = row_customer  # Update last seen customer
-								break
-					if row_customer:
-						break
-				# Use last_customer if row doesn't have customer name
-				current_customer = row_customer or last_customer or email_customer or parsed.sender or ""
-				requirements = _extract_requirements_from_excel_row(rec, bedrock, parsed.sender, current_customer, "email-xlsx", filename or os.path.basename(path), idx, debug=debug)
-				if debug and requirements:
-					print(f"[DEBUG] Row {idx}: extracted {len(requirements)} requirement(s)")
-				rows.extend(requirements)
-			if debug:
-				excel_rows = [r for r in rows if r.get('source') == 'email-xlsx']
-				print(f"[DEBUG] Total Excel requirements extracted from {filename or os.path.basename(path)}: {len(excel_rows)}")
-
-	return rows
+# Removed handle_eml - .eml file handling no longer supported
 
 
 def handle_eml_bytes(raw_bytes: bytes, label: str, bedrock, dry_run: bool, debug: bool = False) -> List[Dict[str, Any]]:
@@ -967,6 +848,12 @@ def handle_eml_bytes(raw_bytes: bytes, label: str, bedrock, dry_run: bool, debug
 			if debug:
 				excel_rows = [r for r in rows if r.get('source') == 'email-xlsx']
 				print(f"[DEBUG] Total Excel requirements extracted from {filename or f'{label}'}: {len(excel_rows)}")
+				if excel_rows:
+					print(f"[DEBUG] Final captured requirements from Excel:")
+					for idx, req in enumerate(excel_rows[:10]):  # Print first 10
+						print(f"  [{idx}] material={req.get('material')}, quantity={req.get('quantity')}, unit={req.get('unit')}, delivery_date={req.get('delivery_date')}, customer={req.get('customer')}")
+					if len(excel_rows) > 10:
+						print(f"  ... and {len(excel_rows) - 10} more")
 
 	return rows
 
