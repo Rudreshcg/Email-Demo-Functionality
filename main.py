@@ -2,6 +2,7 @@ import os
 import io
 import json
 import mimetypes
+import re
 from typing import List, Dict, Any
 
 import click
@@ -416,6 +417,20 @@ def _sanitize_rows(rows: List[Dict[str, Any]], customer: str, source: str, sourc
         # Put description in notes field (like Excel does)
         out["notes"] = final_notes
         out["description"] = description  # Keep description field for reference
+        
+        # Normalize delivery_date to ISO format (YYYY-MM-DD) for consistent pivot tables
+        delivery_date = str(item.get("delivery_date", "") or "").strip()
+        if delivery_date:
+            from analysis import _month_label_to_iso
+            # Convert month format (e.g., "Mar-25") to ISO format (e.g., "2025-03-01")
+            # If already in ISO format, _month_label_to_iso will return it as-is if it doesn't match pattern
+            normalized_date = _month_label_to_iso(delivery_date)
+            # If already in ISO format, keep it; otherwise use normalized date
+            if re.match(r"^\d{4}-\d{2}-\d{2}$", delivery_date):
+                out["delivery_date"] = delivery_date
+            else:
+                out["delivery_date"] = normalized_date
+        
         out["source"] = source
         out["source_file"] = source_file
         cleaned.append(out)
@@ -499,6 +514,25 @@ def main(input_dir: str, out: str, region: str, dry_run: bool, max_files: int, i
 		df["id"] = df["material"]
 	if "delivery_date" in df.columns:
 		df["date"] = df["delivery_date"]
+	
+	# Normalize all dates to ISO format (YYYY-MM-DD) for consistent pivot tables
+	if "date" in df.columns:
+		from analysis import _month_label_to_iso
+		import re as _re_date
+		# Convert all dates to ISO format
+		def normalize_date(date_val):
+			if pd.isna(date_val) or date_val == "":
+				return ""
+			date_str = str(date_val).strip()
+			if not date_str:
+				return ""
+			# If already in ISO format, return as-is
+			if _re_date.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
+				return date_str
+			# Otherwise, try to convert from month format
+			return _month_label_to_iso(date_str)
+		
+		df["date"] = df["date"].apply(normalize_date)
 	
 	# Ensure source column exists for filtering
 	if "source" not in df.columns:
