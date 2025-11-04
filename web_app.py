@@ -101,7 +101,53 @@ def process_emails_async():
                     df[col] = ""
             df = df[df_columns]
             
-            df.to_excel(OUTPUT_FILE, index=False)
+            # Normalize dates to ISO format for consistent pivot tables
+            if "date" in df.columns:
+                from analysis import _month_label_to_iso
+                import re as _re_date
+                def normalize_date(date_val):
+                    if pd.isna(date_val) or date_val == "":
+                        return ""
+                    date_str = str(date_val).strip()
+                    if not date_str:
+                        return ""
+                    if _re_date.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
+                        return date_str
+                    return _month_label_to_iso(date_str)
+                df["date"] = df["date"].apply(normalize_date)
+            
+            # Create pivot-style table
+            pivot_df = None
+            if "date" in df.columns and "quantity" in df.columns and len(df) > 0:
+                try:
+                    df["quantity"] = pd.to_numeric(df["quantity"], errors="coerce").fillna(0)
+                    pivot_df = df.pivot_table(
+                        index=["customer_name", "id", "notes"],
+                        columns="date",
+                        values="quantity",
+                        aggfunc="sum",
+                        fill_value=0
+                    )
+                    pivot_df = pivot_df.reset_index()
+                    date_cols = [col for col in pivot_df.columns if col not in ["customer_name", "id", "notes"]]
+                    def sort_key(col):
+                        try:
+                            if isinstance(col, str) and _re_date.match(r"^\d{4}-\d{2}-\d{2}$", col):
+                                return pd.to_datetime(col)
+                            return pd.to_datetime("1900-01-01")
+                        except:
+                            return pd.to_datetime("1900-01-01")
+                    date_cols_sorted = sorted(date_cols, key=sort_key)
+                    pivot_df = pivot_df[["customer_name", "id", "notes"] + date_cols_sorted]
+                except Exception as e:
+                    print(f"Warning: Could not create pivot table: {e}")
+                    pivot_df = None
+            
+            # Write to Excel with multiple sheets
+            with pd.ExcelWriter(OUTPUT_FILE, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Data', index=False)
+                if pivot_df is not None:
+                    pivot_df.to_excel(writer, sheet_name='Pivot Table', index=False)
             
             row_count = len(df)
             PROCESSING_STATUS["status"] = "completed"
