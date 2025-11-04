@@ -75,42 +75,91 @@ def _extract_customer_from_email(parsed) -> str:
     generic_phrases = [
         "material requirements", "customer material requirements",
         "material requirement", "customer material requirement",
-        "requirements", "material", "customer", "forecast", "test"
+        "requirements", "material", "customer", "forecast", "test",
+        "excel attachment", "excel", "attachment", "table", "table as image",
+        "format", "format1", "format2", "image", "file", "document",
+        "welcome", "hey", "subject", "re:", "fw:", "fwd:", "test email"
     ]
     
     def is_valid_customer_name(name: str) -> bool:
-        """Check if a name is a valid customer name (not generic phrase)."""
+        """Check if a name is a valid customer name (not generic phrase).
+        Valid customer names should look like company names (e.g., "ABC Pvt Ltd", "Cipla", "ENCUBE ETHICALS PVT LTD").
+        """
         if not name or len(name) < 3:
             return False
         name_lower = name.lower().strip()
+        
         # Check if it's a generic phrase
         if name_lower in generic_phrases:
             return False
+        
         # Check if it contains generic phrases
         for phrase in generic_phrases:
             if phrase in name_lower:
                 return False
+        
         # Should not be just common words
-        if name_lower in ["test", "sample", "demo", "example"]:
+        if name_lower in ["test", "sample", "demo", "example", "table", "image", "format", "attachment"]:
             return False
-        return True
+        
+        # Should contain letters (not just numbers or special characters)
+        if not any(c.isalpha() for c in name):
+            return False
+        
+        # Should not be just a single word (unless it's a known company indicator)
+        words = name.split()
+        if len(words) == 1:
+            # Single word could be valid if it's a company name (e.g., "Cipla", "GSK")
+            # But exclude if it's too short or looks generic
+            if len(name) < 4 or name_lower in ["table", "image", "format", "test", "excel", "attachment"]:
+                return False
+        
+        # Should look like a company name - contains letters, may have company indicators
+        # Patterns like "ABC Pvt Ltd", "XYZ Inc", "Company Name", etc.
+        has_company_indicators = any(word.lower() in ["pvt", "ltd", "limited", "inc", "corp", "corporation", "llc", "llp"] for word in words)
+        has_capital_letters = any(c.isupper() for c in name)
+        
+        # If it has company indicators OR starts with capital letters, more likely to be valid
+        if has_company_indicators or (has_capital_letters and len(words) >= 2):
+            return True
+        
+        # If it's just a single short word without company indicators, likely not valid
+        if len(words) == 1 and len(name) < 6:
+            return False
+        
+        # Default: if it passes basic checks and has reasonable length, accept it
+        return len(name) >= 4 and has_capital_letters
     
     # Check email subject for customer name patterns
     subject = str(parsed.subject or "").strip()
     if subject:
         import re
-        # Remove common prefixes like "Material Requirements -" or "Customer Material Requirements -"
-        # First, try to extract customer name after these generic prefixes
+        # Remove common prefixes like "Material Requirements -", "Excel attachment -", "Table -", etc.
         subject_cleaned = subject
-        # Remove "Material Requirements -" or "Customer Material Requirements -" from start
-        subject_cleaned = re.sub(r"^(Material\s+Requirements|Customer\s+Material\s+Requirements)\s*[-–—]\s*", "", subject_cleaned, flags=re.IGNORECASE)
+        # Remove generic prefixes from start
+        generic_prefixes = [
+            r"Material\s+Requirements",
+            r"Customer\s+Material\s+Requirements",
+            r"Excel\s+attachment",
+            r"Table\s+as\s+image",
+            r"Table\s+&\s+Format",
+            r"Table",
+            r"Format",
+            r"Image",
+            r"Attachment",
+            r"Test",
+            r"Welcome",
+            r"Hey"
+        ]
+        prefix_pattern = "|".join(generic_prefixes)
+        subject_cleaned = re.sub(rf"^({prefix_pattern})\s*[-–—&]\s*", "", subject_cleaned, flags=re.IGNORECASE)
         
-        # Look for customer name patterns
+        # Look for customer name patterns (must look like company names)
         patterns = [
             r"^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:\s+(?:Pvt|Ltd|Limited|Inc|Corp|Corporation|LLC|LLP))?)\s*[-–—]",  # "Customer Name - ..." or "ABC Pvt Ltd - ..."
             r"^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:\s+(?:Pvt|Ltd|Limited|Inc|Corp|Corporation|LLC|LLP))?)\s*:",  # "Customer Name: ..."
             r"for\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:\s+(?:Pvt|Ltd|Limited|Inc|Corp|Corporation|LLC|LLP))?)(?:\s|$|,|\.)",  # "... for Customer Name"
-            r"^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:\s+(?:Pvt|Ltd|Limited|Inc|Corp|Corporation|LLC|LLP))?)(?:\s|$)",  # "Customer Name" at start
+            r"^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:\s+(?:Pvt|Ltd|Limited|Inc|Corp|Corporation|LLC|LLP))?)(?:\s|$)",  # "Customer Name" at start (only if it looks like a real name)
         ]
         
         # Try cleaned subject first
@@ -124,7 +173,7 @@ def _extract_customer_from_email(parsed) -> str:
         if customer:
             return customer
         
-        # Try original subject if cleaned didn't work
+        # Try original subject if cleaned didn't work (but be more strict)
         for pattern in patterns:
             match = re.search(pattern, subject, re.IGNORECASE)
             if match:
@@ -229,9 +278,21 @@ def _extract_requirements_from_excel_row(rec: Dict[str, Any], bedrock, customer:
     if not material:
         return []  # Skip rows without material code
     
-    # Check for dropped SKUs
+    # Extract description (product/item description) - will be put in notes field
+    description = ""
+    description_candidates = ["Item Description", "Description", "Product Description", "Product Name", "Item Name"]
+    for col_name in description_candidates:
+        for k, v in other_cols.items():
+            if col_name.lower() in k.lower():
+                description = str(v).strip() if v == v else ""
+                if description:
+                    break
+        if description:
+            break
+    
+    # Extract notes (separate from description)
     notes_text = ""
-    notes_candidates = ["Notes", "Note", "Remarks", "Description"]
+    notes_candidates = ["Notes", "Note", "Remarks"]
     for col_name in notes_candidates:
         for k, v in other_cols.items():
             if col_name.lower() in k.lower():
@@ -240,7 +301,19 @@ def _extract_requirements_from_excel_row(rec: Dict[str, Any], bedrock, customer:
                     break
         if notes_text:
             break
-    if "dropped" in notes_text.lower():
+    
+    # Combine description with notes (description goes to notes field like before)
+    # If both exist, combine them; otherwise use whichever exists
+    final_notes = ""
+    if description and notes_text:
+        final_notes = f"{description} | {notes_text}"
+    elif description:
+        final_notes = description
+    elif notes_text:
+        final_notes = notes_text
+    
+    # Check for dropped SKUs
+    if "dropped" in (final_notes.lower()):
         return []  # Skip dropped SKUs
     
     # Extract customer name if available (priority: Excel row > email subject/body > email sender)
@@ -258,6 +331,18 @@ def _extract_requirements_from_excel_row(rec: Dict[str, Any], bedrock, customer:
     # Priority: Excel row customer > email subject/body customer > email sender (fallback)
     final_customer = row_customer or email_customer or customer or ""
     
+    # Extract unit if available
+    unit = ""
+    unit_candidates = ["Unit", "Units", "UOM", "Batch size", "Pack Size"]
+    for col_name in unit_candidates:
+        for k, v in other_cols.items():
+            if col_name.lower() in k.lower():
+                unit = str(v).strip() if v == v else ""
+                if unit:
+                    break
+        if unit:
+            break
+    
     # Extract requirements from month columns
     requirements = []
     for month_col, qty_val in month_cols:
@@ -272,10 +357,11 @@ def _extract_requirements_from_excel_row(rec: Dict[str, Any], bedrock, customer:
             "customer": final_customer,
             "material": material,
             "quantity": qty,
-            "unit": "",
+            "unit": unit,
             "delivery_date": delivery_date,
             "urgency": "",
-            "notes": notes_text,
+            "description": description,  # Keep description field for reference
+            "notes": final_notes,  # Put description in notes field (like before)
             "source": source,
             "source_file": source_file,
             "row_index": row_idx,
@@ -300,8 +386,20 @@ def _sanitize_rows(rows: List[Dict[str, Any]], customer: str, source: str, sourc
         if not material:
             continue
         notes = str(item.get("notes", "") or "")
+        description = str(item.get("description", "") or "")
+        
+        # Combine description with notes (description should appear in notes field)
+        # If both exist, combine them; otherwise use whichever exists
+        final_notes = ""
+        if description and notes:
+            final_notes = f"{description} | {notes}"
+        elif description:
+            final_notes = description
+        elif notes:
+            final_notes = notes
+        
         # skip dropped SKUs
-        if "dropped" in notes.lower():
+        if "dropped" in final_notes.lower():
             continue
         out = dict(item)
         out["quantity"] = qty
@@ -315,6 +413,9 @@ def _sanitize_rows(rows: List[Dict[str, Any]], customer: str, source: str, sourc
             out["customer"] = row_customer
         else:
             out["customer"] = customer or ""
+        # Put description in notes field (like Excel does)
+        out["notes"] = final_notes
+        out["description"] = description  # Keep description field for reference
         out["source"] = source
         out["source_file"] = source_file
         cleaned.append(out)
@@ -399,7 +500,42 @@ def main(input_dir: str, out: str, region: str, dry_run: bool, max_files: int, i
 	if "delivery_date" in df.columns:
 		df["date"] = df["delivery_date"]
 	
-	# Required columns as per user requirements
+	# Ensure source column exists for filtering
+	if "source" not in df.columns:
+		df["source"] = ""
+	
+	# Priority: Excel data (email-xlsx) over email-text
+	# If Excel data exists for a material, remove ALL email-text entries for that material (Excel is authoritative)
+	if "source" in df.columns and len(df) > 0:
+		excel_rows = df[df["source"].str.contains("email-xlsx|^xlsx$", case=False, na=False)]
+		if len(excel_rows) > 0:
+			# Create set of materials that exist in Excel data
+			excel_materials = set(excel_rows["id"].astype(str).unique())
+			# Remove ALL email-text rows for materials that exist in Excel
+			email_text_rows = df[df["source"].str.contains("email-text", case=False, na=False)]
+			conflicts = []
+			for idx, row in email_text_rows.iterrows():
+				material = str(row["id"])
+				if material in excel_materials:
+					conflicts.append(idx)
+			if conflicts:
+				df = df.drop(conflicts)
+				print(f"Removed {len(conflicts)} email-text row(s) for materials that exist in Excel data (Excel is authoritative)")
+	
+	# Remove duplicates based on customer, material, date, and quantity
+	# Prioritize Excel data (email-xlsx) over email-text
+	before_dedup = len(df)
+	# Sort by source priority: email-xlsx first, then others
+	if "source" in df.columns and len(df) > 0:
+		df["_priority"] = df["source"].apply(lambda x: 0 if "email-xlsx" in str(x) or str(x) == "xlsx" else 1)
+		df = df.sort_values("_priority")
+		df = df.drop(columns=["_priority"])
+	df = df.drop_duplicates(subset=["customer_name", "id", "date", "quantity"], keep="first")
+	after_dedup = len(df)
+	if before_dedup > after_dedup:
+		print(f"Removed {before_dedup - after_dedup} duplicate row(s)")
+	
+	# Required columns as per user requirements (excluding source, source_file, row_index)
 	df_columns = [
 		"customer_name",
 		"id",
@@ -407,8 +543,8 @@ def main(input_dir: str, out: str, region: str, dry_run: bool, max_files: int, i
 		"date",
 	]
 	
-	# Keep additional columns for reference if they exist
-	additional_cols = ["unit", "urgency", "notes", "source", "source_file", "row_index"]
+	# Keep additional columns for reference if they exist (excluding source, source_file, row_index)
+	additional_cols = ["description", "unit", "urgency", "notes"]
 	for col in additional_cols:
 		if col in df.columns:
 			df_columns.append(col)
@@ -417,15 +553,12 @@ def main(input_dir: str, out: str, region: str, dry_run: bool, max_files: int, i
 	for col in df_columns:
 		if col not in df.columns:
 			df[col] = ""
-	df = df[df_columns]
 	
-	# Remove duplicates based on customer, material, date, and quantity
-	# Keep the first occurrence of each duplicate
-	before_dedup = len(df)
-	df = df.drop_duplicates(subset=["customer_name", "id", "date", "quantity"], keep="first")
-	after_dedup = len(df)
-	if before_dedup > after_dedup:
-		print(f"Removed {before_dedup - after_dedup} duplicate row(s)")
+	# Remove source column from final output (it was only needed for filtering)
+	if "source" in df.columns:
+		df = df.drop(columns=["source"])
+	
+	df = df[df_columns]
 	
 	print("\nExtracted rows (to be written):")
 	try:
@@ -507,9 +640,11 @@ def handle_eml(path: str, bedrock, dry_run: bool, debug: bool = False) -> List[D
 				bedrock,
 				user_text=full_text,
 				system_text=(
-					"Extract requirements from an email. Capture customer name (if found in the row data), material ID (product ID/code/SKU), quantity, unit, delivery date, and notes. "
-					"IMPORTANT: Do NOT extract generic phrases like 'Material Requirements', 'Customer Material Requirements', 'Requirements', or 'Material' as customer names. "
-					"Only extract actual company/customer names (e.g., 'ABC Pvt Ltd', 'Cipla', 'ENCUBE ETHICALS PVT LTD'). "
+					"Extract requirements from an email. Capture customer name (if found in the row data), material ID (product ID/code/SKU), quantity, unit, delivery date, description (product/item description if available), and notes. "
+					"CRITICAL: Do NOT extract generic phrases like 'Material Requirements', 'Customer Material Requirements', 'Requirements', 'Material', 'Excel attachment', 'Table', 'Table as image', 'Format', 'Image', 'Attachment', 'Test', 'Welcome', 'Hey' as customer names. "
+					"Only extract actual company/customer names that look like real business names (e.g., 'ABC Pvt Ltd', 'Cipla', 'ENCUBE ETHICALS PVT LTD', 'GSK', 'John Doe Company'). "
+					"A valid customer name should: (1) contain letters, (2) look like a company/person name (not a generic word), (3) may contain company indicators like 'Pvt Ltd', 'Inc', 'Corp', etc. "
+					"If you cannot find a valid customer/company name that looks real, leave the customer field empty (it will be filled from email sender). "
 					"Do NOT extract header rows or rows that are just customer names without material/quantity data."
 				),
 				source="email-text",
@@ -596,6 +731,8 @@ def handle_eml(path: str, bedrock, dry_run: bool, debug: bool = False) -> List[D
 			})
 		else:
 			# Direct extraction: programmatically process month columns
+			# Track customer name across rows (for Excel files where customer name is in a different row)
+			last_customer = email_customer or parsed.sender or ""
 			if debug:
 				print(f"[DEBUG] Processing {len(records)} Excel rows from {filename or os.path.basename(path)}")
 				if records:
@@ -608,7 +745,21 @@ def handle_eml(path: str, bedrock, dry_run: bool, debug: bool = False) -> List[D
 					print(f"[DEBUG] First record columns: {all_cols[:10]}... (total: {len(all_cols)})")
 					print(f"[DEBUG] Month columns found: {month_cols[:10]}... (total: {len(month_cols)})")
 			for idx, rec in enumerate(records):
-				requirements = _extract_requirements_from_excel_row(rec, bedrock, parsed.sender, email_customer, "email-xlsx", filename or os.path.basename(path), idx, debug=debug)
+				# Check if this row has a customer name (but might not have material code)
+				customer_candidates = ["Customer", "Customer Name", "Company"]
+				row_customer = ""
+				for col_name in customer_candidates:
+					for k, v in rec.items():
+						if col_name.lower() in str(k).lower():
+							row_customer = str(v).strip() if v == v else ""
+							if row_customer:
+								last_customer = row_customer  # Update last seen customer
+								break
+					if row_customer:
+						break
+				# Use last_customer if row doesn't have customer name
+				current_customer = row_customer or last_customer or email_customer or parsed.sender or ""
+				requirements = _extract_requirements_from_excel_row(rec, bedrock, parsed.sender, current_customer, "email-xlsx", filename or os.path.basename(path), idx, debug=debug)
 				if debug and requirements:
 					print(f"[DEBUG] Row {idx}: extracted {len(requirements)} requirement(s)")
 				rows.extend(requirements)
@@ -661,9 +812,11 @@ def handle_eml_bytes(raw_bytes: bytes, label: str, bedrock, dry_run: bool, debug
 				bedrock,
 				user_text=full_text,
 				system_text=(
-					"Extract requirements from an email. Capture customer name (if found in the row data), material ID (product ID/code/SKU), quantity, unit, delivery date, and notes. "
-					"IMPORTANT: Do NOT extract generic phrases like 'Material Requirements', 'Customer Material Requirements', 'Requirements', or 'Material' as customer names. "
-					"Only extract actual company/customer names (e.g., 'ABC Pvt Ltd', 'Cipla', 'ENCUBE ETHICALS PVT LTD'). "
+					"Extract requirements from an email. Capture customer name (if found in the row data), material ID (product ID/code/SKU), quantity, unit, delivery date, description (product/item description if available), and notes. "
+					"CRITICAL: Do NOT extract generic phrases like 'Material Requirements', 'Customer Material Requirements', 'Requirements', 'Material', 'Excel attachment', 'Table', 'Table as image', 'Format', 'Image', 'Attachment', 'Test', 'Welcome', 'Hey' as customer names. "
+					"Only extract actual company/customer names that look like real business names (e.g., 'ABC Pvt Ltd', 'Cipla', 'ENCUBE ETHICALS PVT LTD', 'GSK', 'John Doe Company'). "
+					"A valid customer name should: (1) contain letters, (2) look like a company/person name (not a generic word), (3) may contain company indicators like 'Pvt Ltd', 'Inc', 'Corp', etc. "
+					"If you cannot find a valid customer/company name that looks real, leave the customer field empty (it will be filled from email sender). "
 					"Do NOT extract header rows or rows that are just customer names without material/quantity data."
 				),
 				source="email-text",
@@ -745,6 +898,8 @@ def handle_eml_bytes(raw_bytes: bytes, label: str, bedrock, dry_run: bool, debug
 			})
 		else:
 			# Direct extraction: programmatically process month columns
+			# Track customer name across rows (for Excel files where customer name is in a different row)
+			last_customer = email_customer or parsed.sender or ""
 			if debug:
 				print(f"[DEBUG] Processing {len(records)} Excel rows from {filename or f'{label}'}")
 				if records:
@@ -757,7 +912,21 @@ def handle_eml_bytes(raw_bytes: bytes, label: str, bedrock, dry_run: bool, debug
 					print(f"[DEBUG] First record columns: {all_cols[:10]}... (total: {len(all_cols)})")
 					print(f"[DEBUG] Month columns found: {month_cols[:10]}... (total: {len(month_cols)})")
 			for idx, rec in enumerate(records):
-				requirements = _extract_requirements_from_excel_row(rec, bedrock, parsed.sender, email_customer, "email-xlsx", filename or f"{label}", idx, debug=debug)
+				# Check if this row has a customer name (but might not have material code)
+				customer_candidates = ["Customer", "Customer Name", "Company"]
+				row_customer = ""
+				for col_name in customer_candidates:
+					for k, v in rec.items():
+						if col_name.lower() in str(k).lower():
+							row_customer = str(v).strip() if v == v else ""
+							if row_customer:
+								last_customer = row_customer  # Update last seen customer
+								break
+					if row_customer:
+						break
+				# Use last_customer if row doesn't have customer name
+				current_customer = row_customer or last_customer or email_customer or parsed.sender or ""
+				requirements = _extract_requirements_from_excel_row(rec, bedrock, parsed.sender, current_customer, "email-xlsx", filename or f"{label}", idx, debug=debug)
 				if debug and requirements:
 					print(f"[DEBUG] Row {idx}: extracted {len(requirements)} requirement(s)")
 				rows.extend(requirements)
