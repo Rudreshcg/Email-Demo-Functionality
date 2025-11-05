@@ -753,9 +753,16 @@ def handle_eml_bytes(raw_bytes: bytes, label: str, bedrock, dry_run: bool, debug
 			if grid:
 				if debug:
 					print("[DEBUG] Grid extracted successfully, using grid expansion")
-				if debug:
-					print("[DEBUG] Running grid month correction...")
-				grid = correct_grid_months(bedrock, grid, debug=debug)
+					print(f"[DEBUG] Grid has {len(grid.get('rows', []))} rows")
+				# Only run month correction if Jul-23/Aug-23 columns exist (optimization: skip unnecessary API call)
+				columns = [str(c).lower() for c in grid.get('columns', [])]
+				has_rolling_projection = any('jul-23' in c or 'aug-23' in c for c in columns)
+				if has_rolling_projection:
+					if debug:
+						print("[DEBUG] Running grid month correction (Jul-23/Aug-23 columns detected)...")
+					grid = correct_grid_months(bedrock, grid, debug=debug)
+				elif debug:
+					print("[DEBUG] Skipping month correction (no Jul-23/Aug-23 columns)")
 				image_rows = expand_grid_to_requirements(grid, "email-image", f"{label}", email_customer, debug=debug)
 				if debug:
 					print(f"[DEBUG] Grid expansion returned {len(image_rows)} rows")

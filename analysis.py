@@ -276,15 +276,33 @@ def analyze_image_table_grid(
     Returns None if parsing fails.
     """
     prompt = (
-        "Extract the visible table into a normalized JSON grid. "
+        "Extract the COMPLETE visible table into a normalized JSON grid. "
         "Return ONLY one JSON object with keys: columns (array of strings), rows (array of objects). "
-        "The first identifier column is often named 'SKU' or 'Material'. Keep month headers as in the image (e.g., 'May-23', 'Jul-23', 'Aug-23'). "
-        "CRITICAL: You MUST extract ALL data rows from the table. Do NOT truncate or omit any rows. Include every row that has a valid material ID/product code/SKU. "
-        "IMPORTANT: Do NOT include total rows, summary rows, or rows without material/product ID/SKU. "
-        "Only include rows that have a valid material ID/product code/SKU in the identifier column. "
-        "If the image shows a Rolling Projection band (yellow) with Jul-23 and Aug-23, strictly align numbers under the exact month header; do not shift right. "
-        "Include 'Remarks' column if present. "
-        "Ensure the JSON response is complete with all rows included - do not truncate the response."
+        "The first identifier column is often named 'Product Number', 'SKU', or 'Material'. "
+        "Keep all column headers exactly as they appear in the image. "
+        "\n"
+        "CRITICAL EXTRACTION RULES:\n"
+        "1. You MUST extract EVERY SINGLE data row from the table - no exceptions, no omissions, no truncation.\n"
+        "2. Count the rows in the image first, then ensure your JSON has the EXACT same number of data rows.\n"
+        "3. Include ALL rows that contain a valid product number/material ID/SKU (even if some fields are empty).\n"
+        "4. Do NOT skip rows, do NOT truncate the response, do NOT stop early.\n"
+        "5. If you see a product number (like 80435665, 80116209), you MUST include that entire row.\n"
+        "\n"
+        "EXCLUSION RULES:\n"
+        "- Do NOT include header rows (rows that are clearly column headers)\n"
+        "- Do NOT include total/summary rows (rows with 'Total', 'Sum', etc.)\n"
+        "- Do NOT include rows without any product number/material ID/SKU\n"
+        "\n"
+        "SPECIAL INSTRUCTIONS:\n"
+        "- If the table has 'Delivery Date' and 'Receipt Quantity' columns, extract each row with its date and quantity.\n"
+        "- If the image shows a Rolling Projection band (yellow) with Jul-23 and Aug-23, strictly align numbers under the exact month header.\n"
+        "- Include 'Remarks', 'Bayer comments', 'Supplier comments', and all other columns exactly as shown.\n"
+        "- Preserve all data values exactly as they appear - do not modify or infer values.\n"
+        "\n"
+        "VALIDATION:\n"
+        "- Before finishing, verify: row count in JSON = data row count in image (excluding headers/totals).\n"
+        "- Ensure the JSON is complete and valid - the 'rows' array must contain ALL data rows.\n"
+        "- The response must be complete - if you reach max_tokens, you must still include all rows (split if needed, but ensure completeness)."
     )
     if context_text:
         prompt += "\nContext:\n" + context_text[:2000]
@@ -450,6 +468,12 @@ def analyze_image_table_grid(
         return None
     if debug:
         print(f"[DEBUG] Successfully extracted grid with {len(obj.get('columns', []))} columns and {len(obj.get('rows', []))} rows")
+    
+    # Validation: Check if grid seems incomplete (very few rows might indicate truncation)
+    row_count = len(obj.get('rows', []))
+    if row_count < 3 and debug:
+        print(f"[WARNING] Grid has only {row_count} rows - this might indicate incomplete extraction. Verify the image has more data rows.")
+    
     return obj
 
 
@@ -467,15 +491,20 @@ def correct_grid_months(
 ) -> Dict[str, Any]:
     """Ask the text model to correct obvious month misalignments between Jul-23 and Aug-23.
     Returns a possibly adjusted grid with same shape.
+    
+    NOTE: This function makes an additional API call. It should only be called when
+    Jul-23/Aug-23 columns are present to avoid unnecessary API calls and improve performance.
     """
     instruction = (
         "You are given a JSON table grid extracted from an image with month columns. "
         "If both 'Jul-23' and 'Aug-23' columns exist, double-check each row so values are under the correct month. "
         "Do not invent values; only move a value between Jul-23 and Aug-23 if it's clearly placed in the wrong column. "
-        "Always return the adjusted grid object in JSON with the same 'columns' and 'rows' structure."
+        "Always return the adjusted grid object in JSON with the same 'columns' and 'rows' structure. "
+        "Preserve ALL rows - do not remove or omit any rows."
     )
     prompt = f"{instruction}\n\nGRID:\n{_json_dumps(grid)}"
-    raw = converse_text(bedrock, prompt, system_text=None)
+    # Use lower max_tokens for month correction (smaller, focused task)
+    raw = converse_text(bedrock, prompt, system_text=None, max_tokens=4096)
     if debug:
         print("[DEBUG] Corrected grid raw:")
         print(raw[:4000])
@@ -850,32 +879,51 @@ def analyze_image_requirements(
 ) -> List[Dict[str, Any]]:
 	prompt = (
 		"You are extracting order requirements from an image of a table. "
-		"CRITICAL: Identify the QUANTITY column correctly. Look for columns named 'Receipt Quantity', 'Quantity', 'Order Quantity', 'Qty', or similar. "
-		"DO NOT confuse 'Order Leadtime' (which is a time duration like '180 days', '90 days') with quantity. Quantity should be a number with units (e.g., '1 PCE', '2 PCE', '10 PCE', '100', '50 KG'). "
-		"Order Leadtime is NOT quantity - it's the lead time in days. Quantity is the actual order amount in the 'Receipt Quantity' column. "
-		"If the table has month columns (e.g., Mar-23, Apr-23, May-23, Jun-23, Jul-23, Aug-23), "
-		"emit ONE JSON row per non-zero month value for each SKU across both 'Confirmed plan' and 'Rolling Projection'. "
-		"Map columns: SKU/Product Number -> material (product ID/code/SKU - numeric part only), month header -> delivery_date, cell value -> quantity. "
-		"If the table has 'Delivery Date' and 'Receipt Quantity' columns, extract ONE JSON row per row in the table. "
-		"Map: Product Number/Product ID/SKU -> material (numeric part only), Delivery Date -> delivery_date, Receipt Quantity -> quantity (extract the numeric value, unit goes to 'unit' field). "
-		"For example: if Receipt Quantity is '1 PCE', extract quantity=1 and unit='PCE'. "
-		"IMPORTANT: Do NOT extract total rows, summary rows, header rows, or rows without material/product ID/SKU. "
-		"Do NOT extract rows that are just customer names or headings without material/quantity data. "
-		"Only extract rows that have a valid material ID/product code/SKU AND a quantity. "
-		"If 'Remarks' contains 'Dropped', skip that SKU. If a Batch size column exists, do not treat it as quantity. "
-		"Align quantities STRICTLY under their exact month headers; do NOT shift values to adjacent months. "
-		"Normalize month like 'May-23' to ISO date '2023-05-01' when possible; if year is ambiguous, keep the month label as delivery_date. "
-		"For dates like '01-Mar-25', convert to ISO format '2025-03-01'. "
-		"Do not include rows where quantity is 0 or blank. "
-		"Return ONLY JSON (no markdown), as a list of objects with keys: "
-		"customer (customer name if found in row, otherwise empty), material (numeric product ID only), quantity (numeric value only - NOT Order Leadtime), unit (unit of measure like 'PCE', 'KG', etc.), delivery_date (ISO format YYYY-MM-DD), description (product/item description if available), urgency, notes, source, source_file, row_index. "
-		"CRITICAL: Do NOT extract generic phrases like 'Material Requirements', 'Customer Material Requirements', 'Requirements', 'Material', 'Excel attachment', 'Table', 'Table as image', 'Format', 'Image', 'Attachment', 'Test', 'Welcome', 'Hey' as customer names. "
-		"Only extract actual company/customer names that look like real business names (e.g., 'ABC Pvt Ltd', 'Cipla', 'ENCUBE ETHICALS PVT LTD', 'GSK', 'John Doe Company'). "
-		"A valid customer name should: (1) contain letters, (2) look like a company/person name (not a generic word), (3) may contain company indicators like 'Pvt Ltd', 'Inc', 'Corp', etc. "
-		"If you cannot find a valid customer/company name that looks real, leave the customer field empty (it will be filled from email sender). "
-		"If customer name is not found in the row data, leave customer field empty (it will be filled from email sender). "
-		"For unknown fields use empty string. Use 'customer' from context if provided. "
-		"Set 'source' to the provided source and 'source_file' to the provided source_file."
+		"\n"
+		"CRITICAL EXTRACTION RULES:\n"
+		"1. You MUST extract EVERY SINGLE data row from the table - no exceptions, no omissions.\n"
+		"2. Count the data rows in the image first, then ensure your JSON has the EXACT same number of entries.\n"
+		"3. Include ALL rows that contain a valid product number/material ID/SKU (even if quantity is 0 or blank).\n"
+		"4. Do NOT skip rows, do NOT truncate, do NOT stop early.\n"
+		"5. If you see a product number (like 80435665, 80116209), you MUST include that entire row with all its data.\n"
+		"\n"
+		"QUANTITY COLUMN IDENTIFICATION:\n"
+		"- CRITICAL: Identify the QUANTITY column correctly. Look for columns named 'Receipt Quantity', 'Quantity', 'Order Quantity', 'Qty', or similar.\n"
+		"- DO NOT confuse 'Order Leadtime' (which is a time duration like '180 days', '90 days') with quantity.\n"
+		"- Quantity should be a number with units (e.g., '1 PCE', '2 PCE', '10 PCE', '100', '50 KG').\n"
+		"- Order Leadtime is NOT quantity - it's the lead time in days.\n"
+		"- Quantity is the actual order amount in the 'Receipt Quantity' column.\n"
+		"\n"
+		"EXTRACTION FORMATS:\n"
+		"- If the table has 'Delivery Date' and 'Receipt Quantity' columns: extract ONE JSON row per data row in the table.\n"
+		"- Map: Product Number/Product ID/SKU -> material (numeric part only), Delivery Date -> delivery_date, Receipt Quantity -> quantity.\n"
+		"- For example: if Receipt Quantity is '1 PCE', extract quantity=1 and unit='PCE'.\n"
+		"- If the table has month columns (e.g., Mar-23, Apr-23): emit ONE JSON row per non-zero month value for each SKU.\n"
+		"\n"
+		"EXCLUSION RULES:\n"
+		"- Do NOT extract total rows, summary rows, header rows, or rows without material/product ID/SKU.\n"
+		"- Do NOT extract rows that are just customer names or headings without material/quantity data.\n"
+		"- If 'Remarks' contains 'Dropped', skip that SKU.\n"
+		"- If a Batch size column exists, do not treat it as quantity.\n"
+		"- Do not include rows where quantity is 0 or blank (but still extract the row if it has a valid product number).\n"
+		"\n"
+		"DATE FORMATTING:\n"
+		"- For dates like '01-Mar-25', convert to ISO format '2025-03-01'.\n"
+		"- Normalize month like 'May-23' to ISO date '2023-05-01' when possible.\n"
+		"- Align quantities STRICTLY under their exact month headers; do NOT shift values.\n"
+		"\n"
+		"OUTPUT FORMAT:\n"
+		"- Return ONLY JSON (no markdown), as a list of objects with keys:\n"
+		"  customer (customer name if found in row, otherwise empty), material (numeric product ID only), quantity (numeric value only - NOT Order Leadtime), unit (unit of measure like 'PCE', 'KG', etc.), delivery_date (ISO format YYYY-MM-DD), description (product/item description if available), urgency, notes, source, source_file, row_index.\n"
+		"- CRITICAL: Do NOT extract generic phrases like 'Material Requirements', 'Customer Material Requirements', 'Requirements', 'Material', 'Excel attachment', 'Table', 'Table as image', 'Format', 'Image', 'Attachment', 'Test', 'Welcome', 'Hey' as customer names.\n"
+		"- Only extract actual company/customer names that look like real business names.\n"
+		"- If you cannot find a valid customer/company name, leave the customer field empty.\n"
+		"- For unknown fields use empty string.\n"
+		"\n"
+		"VALIDATION:\n"
+		"- Before finishing, verify: number of JSON entries = number of data rows in image (excluding headers/totals).\n"
+		"- Ensure the JSON is complete and valid - the array must contain ALL data rows.\n"
+		"- The response must be complete - include all rows even if you reach max_tokens."
 	)
 
 	if context_text:
