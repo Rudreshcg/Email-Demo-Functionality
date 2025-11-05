@@ -290,7 +290,7 @@ def analyze_image_table_grid(
         prompt += "\nContext:\n" + context_text[:2000]
 
     # Use higher max_tokens for large tables - ensure we can capture all rows
-    raw = converse_image(bedrock, image_bytes, image_format, prompt, max_tokens=20480)
+    raw = converse_image(bedrock, image_bytes, image_format, prompt, max_tokens=8192)
     if debug:
         print("[DEBUG] Image model raw grid:")
         print(raw[:8000])  # Print more to see if JSON is complete
@@ -505,7 +505,7 @@ def refine_projection_with_image(
     # Provide grid as text context alongside the image
     grid_text = _json_dumps(grid)
     vlm_prompt = f"{prompt}\n\nGRID:\n{grid_text}"
-    raw = converse_image(bedrock, image_bytes, image_format, vlm_prompt, max_tokens=20480)
+    raw = converse_image(bedrock, image_bytes, image_format, vlm_prompt, max_tokens=8192)
     if debug:
         print("[DEBUG] Projection refined grid raw:")
         print(raw[:4000])
@@ -886,7 +886,7 @@ def analyze_image_requirements(
 		)
 
 	# Use higher max_tokens for large tables - ensure we can capture all rows
-	raw = converse_image(bedrock, image_bytes, image_format, prompt, max_tokens=20480)
+	raw = converse_image(bedrock, image_bytes, image_format, prompt, max_tokens=8192)
 	if debug:
 		print("[DEBUG] Image model raw output:")
 		print(raw[:4000])

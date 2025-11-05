@@ -27,7 +27,7 @@ def converse_text(
 	bedrock,
 	user_text: str,
 	system_text: Optional[str] = None,
-	max_tokens: int = 20480,
+	max_tokens: int = 8192,
 	temperature: float = 0.0,
 	top_p: float = 0.9,
 ) -> str:
@@ -110,7 +110,7 @@ def converse_image(
 	image_bytes: bytes,
 	image_format: str,
 	prompt: str,
-	max_tokens: int = 20480,  # Increased from 2048 to handle large tables
+	max_tokens: int = 8192,  # Increased from 2048 to handle large tables
 	temperature: float = 0.0,
 	top_p: float = 0.1,
 ) -> str:
