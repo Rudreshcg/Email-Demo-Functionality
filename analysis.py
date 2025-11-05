@@ -194,6 +194,55 @@ def _parse_loose_array(text: str) -> Optional[List[Dict[str, Any]]]:
 	return items if items else None
 
 
+def _normalize_date_to_iso(date_str: str) -> str:
+    """Normalize any date format to ISO format (YYYY-MM-DD).
+    Handles:
+    - 2025-03-01 (already ISO)
+    - 2025-11-01 00:00:00 (ISO with timestamp)
+    - 01-Jan-26 (day-month-year)
+    - 01-Mar-25 (day-month-year)
+    - Mar-25 (month-year)
+    - May-23 (month-year)
+    Returns ISO format (YYYY-MM-DD) or original string if parsing fails.
+    """
+    if not date_str:
+        return ""
+    
+    date_str = str(date_str).strip()
+    if not date_str:
+        return ""
+    
+    import re as _re
+    
+    # Handle ISO format with timestamp: "2025-11-01 00:00:00" -> "2025-11-01"
+    iso_with_time_match = _re.match(r"^(\d{4}-\d{2}-\d{2})\s+\d{2}:\d{2}:\d{2}", date_str)
+    if iso_with_time_match:
+        return iso_with_time_match.group(1)
+    
+    # Handle pure ISO format: "2025-03-01" -> return as-is
+    if _re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
+        return date_str
+    
+    # Handle day-month-year format: "01-Jan-26" or "01-Mar-25"
+    day_month_year_match = _re.match(r"^(\d{1,2})[-/](Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[-'](\d{2,4})$", date_str, _re.IGNORECASE)
+    if day_month_year_match:
+        try:
+            day = int(day_month_year_match.group(1))
+            mon_str = day_month_year_match.group(2).title()
+            year_str = day_month_year_match.group(3)
+            year = int(year_str)
+            year = 2000 + year if year < 100 else year
+            
+            MONTHS = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,"Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
+            mm = MONTHS.get(mon_str, 1)
+            return f"{year:04d}-{mm:02d}-{day:02d}"
+        except Exception:
+            pass
+    
+    # Handle month-year format: "Mar-25" or "May-23" -> "2025-03-01" or "2023-05-01"
+    return _month_label_to_iso(date_str)
+
+
 def _month_label_to_iso(month_label: str) -> str:
     """Convert labels like 'May-23' or "May'23" to ISO '2023-05-01' when possible.
     Falls back to the original label if parsing fails.
@@ -230,15 +279,18 @@ def analyze_image_table_grid(
         "Extract the visible table into a normalized JSON grid. "
         "Return ONLY one JSON object with keys: columns (array of strings), rows (array of objects). "
         "The first identifier column is often named 'SKU' or 'Material'. Keep month headers as in the image (e.g., 'May-23', 'Jul-23', 'Aug-23'). "
+        "CRITICAL: You MUST extract ALL data rows from the table. Do NOT truncate or omit any rows. Include every row that has a valid material ID/product code/SKU. "
         "IMPORTANT: Do NOT include total rows, summary rows, or rows without material/product ID/SKU. "
         "Only include rows that have a valid material ID/product code/SKU in the identifier column. "
         "If the image shows a Rolling Projection band (yellow) with Jul-23 and Aug-23, strictly align numbers under the exact month header; do not shift right. "
-        "Include 'Remarks' column if present."
+        "Include 'Remarks' column if present. "
+        "Ensure the JSON response is complete with all rows included - do not truncate the response."
     )
     if context_text:
         prompt += "\nContext:\n" + context_text[:2000]
 
-    raw = converse_image(bedrock, image_bytes, image_format, prompt)
+    # Use higher max_tokens for large tables - ensure we can capture all rows
+    raw = converse_image(bedrock, image_bytes, image_format, prompt, max_tokens=20480)
     if debug:
         print("[DEBUG] Image model raw grid:")
         print(raw[:8000])  # Print more to see if JSON is complete
@@ -453,7 +505,7 @@ def refine_projection_with_image(
     # Provide grid as text context alongside the image
     grid_text = _json_dumps(grid)
     vlm_prompt = f"{prompt}\n\nGRID:\n{grid_text}"
-    raw = converse_image(bedrock, image_bytes, image_format, vlm_prompt)
+    raw = converse_image(bedrock, image_bytes, image_format, vlm_prompt, max_tokens=20480)
     if debug:
         print("[DEBUG] Projection refined grid raw:")
         print(raw[:4000])
@@ -586,12 +638,8 @@ def expand_grid_to_requirements(
                 if unit_match:
                     unit = unit_match.group(1).strip()
             
-            # Convert date to ISO format
-            delivery_date_iso = delivery_date_val
-            if _re.match(r"\d{2}-[A-Za-z]{3}-\d{2}", delivery_date_val):
-                delivery_date_iso = _month_label_to_iso(delivery_date_val)
-            elif not _re.match(r"^\d{4}-\d{2}-\d{2}$", delivery_date_val):
-                delivery_date_iso = _month_label_to_iso(delivery_date_val)
+            # Normalize date to ISO format (YYYY-MM-DD)
+            delivery_date_iso = _normalize_date_to_iso(delivery_date_val)
             
             # Extract description if available
             description = ""
@@ -718,7 +766,7 @@ def expand_grid_to_requirements(
                 "material": material,
                 "quantity": qty,
                 "unit": "",
-                "delivery_date": _month_label_to_iso(month_label),
+                "delivery_date": _normalize_date_to_iso(month_label),
                 "urgency": "",
                 "notes": remarks,
                 "source": source,
@@ -837,7 +885,8 @@ def analyze_image_requirements(
 			+ context_text[:2000]
 		)
 
-	raw = converse_image(bedrock, image_bytes, image_format, prompt)
+	# Use higher max_tokens for large tables - ensure we can capture all rows
+	raw = converse_image(bedrock, image_bytes, image_format, prompt, max_tokens=20480)
 	if debug:
 		print("[DEBUG] Image model raw output:")
 		print(raw[:4000])

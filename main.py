@@ -214,7 +214,6 @@ def _extract_requirements_from_excel_row(rec: Dict[str, Any], bedrock, customer:
     This avoids LLM date mapping errors by directly reading month column headers.
     """
     import re as _re
-    from analysis import _month_label_to_iso
     
     # Identify month columns
     month_pattern = _re.compile(r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-zA-Z\-']*\s?\d{2,4}$", _re.IGNORECASE)
@@ -374,14 +373,9 @@ def _extract_requirements_from_excel_row(rec: Dict[str, Any], bedrock, customer:
                     unit = unit_match.group(1).strip()
             
             if qty > 0:
-                # Convert date to ISO format
-                delivery_date_iso = delivery_date_val
-                # Try to convert date formats like "01-Mar-25" to ISO
-                if _re.match(r"\d{2}-[A-Za-z]{3}-\d{2}", delivery_date_val):
-                    delivery_date_iso = _month_label_to_iso(delivery_date_val)
-                elif not _re.match(r"^\d{4}-\d{2}-\d{2}$", delivery_date_val):
-                    # Try other date formats
-                    delivery_date_iso = _month_label_to_iso(delivery_date_val)
+                # Normalize date to ISO format (YYYY-MM-DD)
+                from analysis import _normalize_date_to_iso
+                delivery_date_iso = _normalize_date_to_iso(delivery_date_val)
                 
                 requirements.append({
                     "customer": final_customer,
@@ -405,8 +399,9 @@ def _extract_requirements_from_excel_row(rec: Dict[str, Any], bedrock, customer:
         if qty <= 0:
             continue
         
-        # Convert month label to ISO date
-        delivery_date = _month_label_to_iso(month_col)
+        # Normalize month label to ISO date (YYYY-MM-DD)
+        from analysis import _normalize_date_to_iso
+        delivery_date = _normalize_date_to_iso(month_col)
         
         requirements.append({
             "customer": final_customer,
@@ -477,15 +472,9 @@ def _sanitize_rows(rows: List[Dict[str, Any]], customer: str, source: str, sourc
         # Normalize delivery_date to ISO format (YYYY-MM-DD) for consistent pivot tables
         delivery_date = str(item.get("delivery_date", "") or "").strip()
         if delivery_date:
-            from analysis import _month_label_to_iso
-            # Convert month format (e.g., "Mar-25") to ISO format (e.g., "2025-03-01")
-            # If already in ISO format, _month_label_to_iso will return it as-is if it doesn't match pattern
-            normalized_date = _month_label_to_iso(delivery_date)
-            # If already in ISO format, keep it; otherwise use normalized date
-            if re.match(r"^\d{4}-\d{2}-\d{2}$", delivery_date):
-                out["delivery_date"] = delivery_date
-            else:
-                out["delivery_date"] = normalized_date
+            from analysis import _normalize_date_to_iso
+            # Normalize any date format to ISO format (YYYY-MM-DD)
+            out["delivery_date"] = _normalize_date_to_iso(delivery_date)
         
         out["source"] = source
         out["source_file"] = source_file
@@ -567,8 +556,7 @@ def main(input_dir: str, out: str, region: str, dry_run: bool, max_files: int, i
 	
 	# Normalize all dates to ISO format (YYYY-MM-DD) for consistent pivot tables
 	if "date" in df.columns:
-		from analysis import _month_label_to_iso
-		import re as _re_date
+		from analysis import _normalize_date_to_iso
 		# Convert all dates to ISO format
 		def normalize_date(date_val):
 			if pd.isna(date_val) or date_val == "":
@@ -576,11 +564,8 @@ def main(input_dir: str, out: str, region: str, dry_run: bool, max_files: int, i
 			date_str = str(date_val).strip()
 			if not date_str:
 				return ""
-			# If already in ISO format, return as-is
-			if _re_date.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
-				return date_str
-			# Otherwise, try to convert from month format
-			return _month_label_to_iso(date_str)
+			# Normalize any date format to ISO format (YYYY-MM-DD)
+			return _normalize_date_to_iso(date_str)
 		
 		df["date"] = df["date"].apply(normalize_date)
 	
