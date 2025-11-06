@@ -45,12 +45,15 @@ def _coerce_number(value) -> float:
 
 
 def _clean_material_code(material: str) -> str:
-    """Extract the material code from text that may include additional description.
+    """Clean material code - extract numeric part and skip Excel formatting artifacts like '#####'.
     Examples: '59432479 Alloga UK' -> '59432479', '66800015 Japan' -> '66800015'
     """
     if not material:
         return ""
-    material = material.strip()
+    material = str(material).strip()
+    # Skip Excel formatting artifacts
+    if material in ("####", "#####", "-", "N/A", "n/a", "None", ""):
+        return ""
     # If it starts with digits, extract the leading numeric part
     import re
     match = re.match(r'^(\d+)', material)
@@ -216,34 +219,109 @@ def _extract_requirements_from_excel_row(rec: Dict[str, Any], bedrock, customer:
     import re as _re
     
     # Identify month columns
-    month_pattern = _re.compile(r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-zA-Z\-']*\s?\d{2,4}$", _re.IGNORECASE)
+    # Handle both abbreviated (Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec)
+    # and full month names (January, February, March, April, May, June, July, August, September, October, November, December)
+    # Also handle variations like "June", "July", "Sept" for September
+    # Also handle formats like "1-May-23", "1-.1", "23-Mar", "23-Apr" (date columns that might be month indicators)
+    month_pattern = _re.compile(r"^(\d+[-.])?(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|Jun(e)?|Jul(y)?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)[a-zA-Z\-']*\s?\d{2,4}$", _re.IGNORECASE)
     month_cols = []
     other_cols = {}
     
     for k, v in rec.items():
-        if v == v:  # filter NaN
-            if month_pattern.match(str(k).strip()):
-                month_cols.append((str(k).strip(), v))
-            else:
-                other_cols[str(k).strip()] = v
+        # Include all values, even NaN/empty - we'll handle them later
+        # This ensures we capture ALL month columns, even if some cells are empty
+        if month_pattern.match(str(k).strip()):
+            # Store month column even if value is NaN/empty - we'll treat empty as 0
+            month_cols.append((str(k).strip(), v if v == v else None))
+        else:
+            other_cols[str(k).strip()] = v
     
-    # Extract material code from other columns
-    id_candidates = ["Product Number", "Product ID", "Item Code", "Item Number", "Item", "SKU", "Material", "Code", "Part #", "Part Number", "Supplier Part #", "Product Code"]
+    # Extract material code from other columns - intelligently identify the product identifier column
+    # Priority order: prefer SKU/Product Number over Loc when both exist
+    id_candidates_priority = ["SKU", "Product Number", "Product ID", "Item Code", "Item Number", "Material", "Code", "Part #", "Part Number", "Supplier Part #", "Product Code", "Item"]
+    # Also check for Item Description as fallback if no material code found
+    id_candidates_fallback = ["Item Description", "Item Descrip", "Description", "Product Description"]
+    # Also check for Loc, but with lower priority
+    id_candidates_lower_priority = ["Loc", "Location"]
+    
     material = ""
-    for col_name in id_candidates:
+    # First, try priority candidates (SKU, Product Number, etc.)
+    for col_name in id_candidates_priority:
         for k, v in other_cols.items():
             k_lower = str(k).strip().lower()
             col_lower = col_name.lower().strip()
             # More flexible matching - check if column name contains or equals the candidate
             if col_lower in k_lower or k_lower in col_lower or k_lower == col_lower:
                 material = str(v).strip() if v == v else ""
-                if material and material not in ("-", "N/A", "n/a", "None", ""):
+                # Skip "#####" which is Excel's way of showing a number that's too wide - not a material code
+                if material and material not in ("-", "N/A", "n/a", "None", "", "####", "#####"):
                     material = _clean_material_code(material)
-                    if debug and material:
-                        print(f"[DEBUG] Found material code '{material}' in column '{k}'")
-                    break
+                    if material and material not in ("####", "#####"):  # Double check after cleaning
+                        if debug and material:
+                            print(f"[DEBUG] Found material code '{material}' in column '{k}'")
+                        break
         if material:
             break
+    
+    # If no material found in priority columns, try lower priority (Loc) only if no SKU/Product Number exists
+    if not material:
+        # Check if any priority column exists in the table
+        has_priority_column = False
+        for col_name in id_candidates_priority:
+            for k in other_cols.keys():
+                k_lower = str(k).strip().lower()
+                col_lower = col_name.lower().strip()
+                if col_lower in k_lower or k_lower in col_lower or k_lower == col_lower:
+                    has_priority_column = True
+                    break
+            if has_priority_column:
+                break
+        
+        # Only use Loc if no priority column exists
+        if not has_priority_column:
+            for col_name in id_candidates_lower_priority:
+                for k, v in other_cols.items():
+                    k_lower = str(k).strip().lower()
+                    col_lower = col_name.lower().strip()
+                    if col_lower in k_lower or k_lower in col_lower or k_lower == col_lower:
+                        material = str(v).strip() if v == v else ""
+                        # Skip "#####" which is Excel's way of showing a number that's too wide - not a material code
+                        if material and material not in ("-", "N/A", "n/a", "None", "", "####", "#####"):
+                            material = _clean_material_code(material)
+                            if material and material not in ("####", "#####"):  # Double check after cleaning
+                                if debug and material:
+                                    print(f"[DEBUG] Found material code '{material}' in column '{k}' (using Loc as fallback)")
+                                break
+                if material:
+                    break
+    
+    # If no material found in priority columns, try Item Description as fallback
+    if not material:
+        for col_name in id_candidates_fallback:
+            for k, v in other_cols.items():
+                k_lower = str(k).strip().lower()
+                col_lower = col_name.lower().strip()
+                # More flexible matching - check if column name contains or equals the candidate
+                if col_lower in k_lower or k_lower in col_lower or k_lower == col_lower:
+                    material = str(v).strip() if v == v else ""
+                    # Skip "#####" which is Excel's way of showing a number that's too wide - not a material code
+                    if material and material not in ("-", "N/A", "n/a", "None", "", "####", "#####"):
+                        # For descriptions like "WLG - 1", extract the meaningful part
+                        # Try to extract code from format like "WLG - 1" -> "WLG" or "1"
+                        import re as _re_desc
+                        # If it has format "XXX - YYY", extract XXX or YYY
+                        desc_match = _re_desc.match(r'^([A-Z0-9]+)\s*-\s*(\d+)$', material)
+                        if desc_match:
+                            # Prefer the numeric part if it exists, otherwise use the prefix
+                            material = desc_match.group(2) or desc_match.group(1)
+                        else:
+                            material = _clean_material_code(material)
+                        if material and material not in ("####", "#####"):  # Double check after cleaning
+                            if debug and material:
+                                print(f"[DEBUG] Found material code '{material}' in column '{k}' (using Item Description as fallback)")
+                            break
+            if material:
+                break
     
     if not material:
         # If no material code found, try to extract from all non-month columns using LLM
@@ -356,23 +434,32 @@ def _extract_requirements_from_excel_row(rec: Dict[str, Any], bedrock, customer:
         delivery_date_val = str(other_cols.get(delivery_date_col, "")).strip()
         receipt_quantity_val = str(other_cols.get(receipt_quantity_col, "")).strip()
         
-        if delivery_date_val and receipt_quantity_val:
+        # Handle empty cells - treat empty receipt quantity as 0, but still need a date
+        if delivery_date_val:  # Only process if we have a date
+            # If receipt quantity is empty, treat as 0 but still capture the row
+            if not receipt_quantity_val or receipt_quantity_val.strip() in ("", "-", "N/A", "n/a", "None", "####", "nan", "NaN"):
+                receipt_quantity_val = "0"  # Treat empty as zero
+            
             # Extract numeric quantity from "Receipt Quantity" (e.g., "1 PCE" -> 1)
-            qty_str = receipt_quantity_val
-            # Try to extract numeric part
-            qty_match = _re.search(r"(\d+(?:\.\d+)?)", qty_str)
-            if qty_match:
-                qty = _coerce_number(qty_match.group(1))
+            # Handle "####" which is Excel's way of showing a number that's too wide
+            qty_str = receipt_quantity_val.strip()
+            if qty_str == "####":
+                qty = 0.0  # Treat as zero
             else:
-                qty = _coerce_number(receipt_quantity_val)
-            
-            # If unit wasn't found in "Unit of Measure", try to extract from "Receipt Quantity"
-            if not unit and receipt_quantity_val:
-                unit_match = _re.search(r"\d+\s*([A-Za-z]+)", receipt_quantity_val)
-                if unit_match:
-                    unit = unit_match.group(1).strip()
-            
-            if qty > 0:
+                # Try to extract numeric part
+                qty_match = _re.search(r"(\d+(?:\.\d+)?)", qty_str)
+                if qty_match:
+                    qty = _coerce_number(qty_match.group(1))
+                else:
+                    qty = _coerce_number(receipt_quantity_val)
+                
+                # If unit wasn't found in "Unit of Measure", try to extract from "Receipt Quantity"
+                if not unit and receipt_quantity_val:
+                    unit_match = _re.search(r"\d+\s*([A-Za-z]+)", receipt_quantity_val)
+                    if unit_match:
+                        unit = unit_match.group(1).strip()
+                
+                # Keep ALL rows including zero quantities
                 # Normalize date to ISO format (YYYY-MM-DD)
                 from analysis import _normalize_date_to_iso
                 delivery_date_iso = _normalize_date_to_iso(delivery_date_val)
@@ -394,10 +481,25 @@ def _extract_requirements_from_excel_row(rec: Dict[str, Any], bedrock, customer:
                     print(f"[DEBUG] Row {row_idx}: Extracted requirement - material={material}, quantity={qty}, unit={unit}, delivery_date={delivery_date_iso}")
     
     # Also extract requirements from month columns (if any)
+    # CRITICAL: Extract from ALL month columns, even if empty - treat empty as zero
     for month_col, qty_val in month_cols:
-        qty = _coerce_number(qty_val)
-        if qty <= 0:
-            continue
+        # Handle empty cells, "####" (Excel formatting issue), and NaN values
+        if qty_val is None or (isinstance(qty_val, float) and str(qty_val).lower() in ("nan", "none")):
+            qty = 0.0
+        elif isinstance(qty_val, str):
+            qty_str = qty_val.strip()
+            if qty_str in ("", "-", "N/A", "n/a", "None", "####", "nan", "NaN"):
+                qty = 0.0
+            else:
+                qty = _coerce_number(qty_val)
+        else:
+            # Handle "####" which is Excel's way of showing a number that's too wide
+            qty_str = str(qty_val).strip()
+            if qty_str == "####":
+                qty = 0.0  # Treat as zero (could try to read actual value, but safer to use 0)
+            else:
+                qty = _coerce_number(qty_val)
+        # Keep ALL rows including zero quantities - do not skip
         
         # Normalize month label to ISO date (YYYY-MM-DD)
         from analysis import _normalize_date_to_iso
@@ -426,9 +528,7 @@ def _sanitize_rows(rows: List[Dict[str, Any]], customer: str, source: str, sourc
     cleaned: List[Dict[str, Any]] = []
     for item in rows or []:
         qty = _coerce_number(item.get("quantity", 0))
-        # drop zero or negative quantities
-        if qty <= 0:
-            continue
+        # Keep ALL rows including zero quantities - do not drop any
         # skip rows without material/item number (likely total/summary rows)
         material = str(item.get("material", "") or item.get("id", "") or "").strip()
         if not material:

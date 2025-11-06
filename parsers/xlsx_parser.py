@@ -13,7 +13,9 @@ def _drop_summary_rows(df: pd.DataFrame) -> pd.DataFrame:
 	
 	# Identify month columns by pattern
 	import re as _re
-	month_cols = [c for c in df.columns if _re.match(r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-zA-Z\-']*\s?\d{2,4}$", str(c), _re.IGNORECASE)]
+	# Handle both abbreviated and full month names (e.g., "June", "July", "Sept")
+	# Also handle formats like "1-May-23", "1-.1", "23-Mar", "23-Apr" (date columns that might be month indicators)
+	month_cols = [c for c in df.columns if _re.match(r"^(\d+[-.])?(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|Jun(e)?|Jul(y)?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)[a-zA-Z\-']*\s?\d{2,4}$", str(c), _re.IGNORECASE)]
 	if not month_cols:
 		return df
 
@@ -55,7 +57,9 @@ def _find_header_row(df: pd.DataFrame) -> int:
 	"""Find the row index that contains the actual data headers (Description, Item Code, month columns)."""
 	import re as _re
 	from datetime import datetime
-	month_pattern = _re.compile(r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-zA-Z\-']*\s?\d{2,4}$", _re.IGNORECASE)
+	# Handle both abbreviated and full month names (e.g., "June", "July", "Sept")
+	# Also handle formats like "1-May-23", "1-.1", "23-Mar", "23-Apr" (date columns that might be month indicators)
+	month_pattern = _re.compile(r"^(\d+[-.])?(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|Jun(e)?|Jul(y)?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)[a-zA-Z\-']*\s?\d{2,4}$", _re.IGNORECASE)
 	date_pattern = _re.compile(r"^\d{4}-\d{2}-\d{2}")  # Matches dates like "2023-03-05"
 	
 	# Look for a row that has both an ID column and date/month columns
@@ -81,7 +85,9 @@ def read_xlsx_bytes(xlsx_bytes: bytes) -> List[Dict[str, Any]]:
 	dfs = pd.read_excel(BytesIO(xlsx_bytes), engine="openpyxl", sheet_name=None, header=None)
 	records: List[Dict[str, Any]] = []
 	import re as _re
-	month_pattern = _re.compile(r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-zA-Z\-']*\s?\d{2,4}$", _re.IGNORECASE)
+	# Handle both abbreviated and full month names (e.g., "June", "July", "Sept")
+	# Also handle formats like "1-May-23", "1-.1", "23-Mar", "23-Apr" (date columns that might be month indicators)
+	month_pattern = _re.compile(r"^(\d+[-.])?(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|Jun(e)?|Jul(y)?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)[a-zA-Z\-']*\s?\d{2,4}$", _re.IGNORECASE)
 	
 	for sheet_name, df in dfs.items():
 		if df is None or df.empty:
@@ -142,7 +148,9 @@ def read_xlsx_file(path: str) -> List[Dict[str, Any]]:
 	dfs = pd.read_excel(path, engine="openpyxl", sheet_name=None, header=None)
 	records: List[Dict[str, Any]] = []
 	import re as _re
-	month_pattern = _re.compile(r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-zA-Z\-']*\s?\d{2,4}$", _re.IGNORECASE)
+	# Handle both abbreviated and full month names (e.g., "June", "July", "Sept")
+	# Also handle formats like "1-May-23", "1-.1", "23-Mar", "23-Apr" (date columns that might be month indicators)
+	month_pattern = _re.compile(r"^(\d+[-.])?(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|Jun(e)?|Jul(y)?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)[a-zA-Z\-']*\s?\d{2,4}$", _re.IGNORECASE)
 	
 	for sheet_name, df in dfs.items():
 		if df is None or df.empty:

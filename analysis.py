@@ -244,22 +244,71 @@ def _normalize_date_to_iso(date_str: str) -> str:
 
 
 def _month_label_to_iso(month_label: str) -> str:
-    """Convert labels like 'May-23' or "May'23" to ISO '2023-05-01' when possible.
+    """Convert labels like 'May-23' or "May'23" or "June'23" or "July'23" or "Sept'23" to ISO '2023-05-01' when possible.
     Falls back to the original label if parsing fails.
+    Handles both abbreviated (Jun, Jul, Sep) and full month names (June, July, Sept).
     """
     try:
         import re as _re
         label = (month_label or "").strip()
         label = label.replace("\u2019", "'")
-        m = _re.match(r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[-']?(\s)?(\d{2,4})$", label, _re.IGNORECASE)
+        # Handle both abbreviated and full month names (e.g., "June", "July", "Sept")
+        # Extract month name and year separately
+        m = _re.match(r"^(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|Jun(e)?|Jul(y)?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)[-']?\s?(\d{2,4})$", label, _re.IGNORECASE)
         if not m:
             return month_label
         mon = m.group(1).title()
-        year = m.group(3)
-        year = int(year)
+        # Find the year - it's the last group that matches digits
+        year_str = None
+        for i in range(len(m.groups()), 0, -1):
+            g = m.group(i)
+            if g and _re.match(r'^\d{2,4}$', g):
+                year_str = g
+                break
+        if not year_str:
+            return month_label
+        year = int(year_str)
         year = 2000 + year if year < 100 else year
-        MONTHS = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,"Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
-        mm = MONTHS.get(mon, 1)
+        # Map both abbreviated and full month names to numbers
+        MONTHS = {
+            "Jan":1, "January":1,
+            "Feb":2, "February":2,
+            "Mar":3, "March":3,
+            "Apr":4, "April":4,
+            "May":5,
+            "Jun":6, "June":6,
+            "Jul":7, "July":7,
+            "Aug":8, "August":8,
+            "Sep":9, "Sept":9, "September":9,
+            "Oct":10, "October":10,
+            "Nov":11, "November":11,
+            "Dec":12, "December":12
+        }
+        # Normalize month name - handle variations
+        if mon.startswith("Jun") and len(mon) > 3:
+            mon = "June"
+        elif mon.startswith("Jul") and len(mon) > 3:
+            mon = "July"
+        elif mon.startswith("Sep") and len(mon) > 3:
+            mon = "Sept"  # Prefer "Sept" over "September" for matching
+        elif mon.startswith("Jan") and len(mon) > 3:
+            mon = "January"
+        elif mon.startswith("Feb") and len(mon) > 3:
+            mon = "February"
+        elif mon.startswith("Mar") and len(mon) > 3:
+            mon = "March"
+        elif mon.startswith("Apr") and len(mon) > 3:
+            mon = "April"
+        elif mon.startswith("Aug") and len(mon) > 3:
+            mon = "August"
+        elif mon.startswith("Oct") and len(mon) > 3:
+            mon = "October"
+        elif mon.startswith("Nov") and len(mon) > 3:
+            mon = "November"
+        elif mon.startswith("Dec") and len(mon) > 3:
+            mon = "December"
+        
+        mm = MONTHS.get(mon, MONTHS.get(mon[:3], 1))  # Try full name, then first 3 chars
         return f"{year:04d}-{mm:02d}-01"
     except Exception:
         return month_label
@@ -278,29 +327,59 @@ def analyze_image_table_grid(
     prompt = (
         "Extract the COMPLETE visible table into a normalized JSON grid. "
         "Return ONLY one JSON object with keys: columns (array of strings), rows (array of objects). "
-        "The first identifier column is often named 'Product Number', 'SKU', or 'Material'. "
-        "Keep all column headers exactly as they appear in the image. "
+        "\n"
+        "THINK LIKE A HUMAN - UNDERSTAND THE TABLE:\n"
+        "1. Look at the table structure - understand what each column represents by its header and data patterns.\n"
+        "2. Column names may vary - identify columns by their MEANING, not just exact names.\n"
+        "3. Understand the table layout - identify identifier columns, description columns, quantity columns, date columns, etc.\n"
+        "4. Read the table systematically - extract all data rows completely.\n"
+        "\n"
+        "INTELLIGENT COLUMN IDENTIFICATION:\n"
+        "1. MATERIAL/PRODUCT IDENTIFIER COLUMN:\n"
+        "   - Look for columns containing product codes, SKUs, material IDs, or item identifiers.\n"
+        "   - Common names: 'Product Number', 'SKU', 'Material', 'Item Code', 'Product ID', 'Code', 'Part Number', 'Loc' (if it's the identifier).\n"
+        "   - If multiple identifier columns exist, use the one that appears to be the primary product identifier.\n"
+        "   - If both 'Loc' and 'SKU' exist, typically 'SKU' is the product identifier (use that), while 'Loc' might be location.\n"
+        "\n"
+        "2. DESCRIPTION COLUMN:\n"
+        "   - Look for columns with product descriptions, item names, or product information.\n"
+        "   - Common names: 'Description', 'Product Description', 'Item Description', 'Product Name', 'Product Short Description'.\n"
+        "\n"
+        "3. QUANTITY/DATE COLUMNS:\n"
+        "   - Month columns: Headers like 'Mar-23', 'Apr-23', 'May-23', 'Jun-23', 'Jul-23', 'Aug-23', etc. - extract from ALL of them.\n"
+        "   - Date/Quantity pairs: If you see 'Delivery Date' and 'Receipt Quantity' columns, extract each row with its date and quantity.\n"
+        "   - Count ALL month columns from first to last - do NOT miss any, including the last one.\n"
+        "\n"
+        "4. OTHER COLUMNS:\n"
+        "   - Extract all other columns exactly as shown (Remarks, Comments, etc.).\n"
+        "   - Preserve column headers exactly as they appear - do not modify names.\n"
         "\n"
         "CRITICAL EXTRACTION RULES:\n"
         "1. You MUST extract EVERY SINGLE data row from the table - no exceptions, no omissions, no truncation.\n"
         "2. Count the rows in the image first, then ensure your JSON has the EXACT same number of data rows.\n"
         "3. Include ALL rows that contain a valid product number/material ID/SKU (even if some fields are empty).\n"
         "4. Do NOT skip rows, do NOT truncate the response, do NOT stop early.\n"
-        "5. If you see a product number (like 80435665, 80116209), you MUST include that entire row.\n"
+        "5. If you see a product number (like 80435665, 80116209, ABC, DEF), you MUST include that entire row.\n"
+        "6. Extract ALL columns for each row - do not omit any columns.\n"
         "\n"
         "EXCLUSION RULES:\n"
         "- Do NOT include header rows (rows that are clearly column headers)\n"
         "- Do NOT include total/summary rows (rows with 'Total', 'Sum', etc.)\n"
         "- Do NOT include rows without any product number/material ID/SKU\n"
         "\n"
-        "SPECIAL INSTRUCTIONS:\n"
-        "- If the table has 'Delivery Date' and 'Receipt Quantity' columns, extract each row with its date and quantity.\n"
-        "- If the image shows a Rolling Projection band (yellow) with Jul-23 and Aug-23, strictly align numbers under the exact month header.\n"
-        "- Include 'Remarks', 'Bayer comments', 'Supplier comments', and all other columns exactly as shown.\n"
+        "DATA PRESERVATION:\n"
+        "- Keep all column headers exactly as they appear in the image.\n"
         "- Preserve all data values exactly as they appear - do not modify or infer values.\n"
+        "- CRITICAL: If a cell is empty, blank, or missing, extract it as null, empty string \"\", or 0 - do NOT infer a value, do NOT use a value from another cell.\n"
+        "- CRITICAL: Do NOT shift values between columns - if a cell is empty, it means that cell is empty, NOT the value from another column.\n"
+        "- CRITICAL: Do NOT fill empty cells with values from adjacent cells - if a cell is empty, it stays empty (or becomes 0 for quantity columns).\n"
+        "- CRITICAL: If you cannot clearly see a value in a cell, extract it as null or empty - do NOT guess or infer.\n"
+        "- Extract all columns, even if some seem less important.\n"
+        "- Extract all rows completely - do NOT miss any data.\n"
         "\n"
         "VALIDATION:\n"
         "- Before finishing, verify: row count in JSON = data row count in image (excluding headers/totals).\n"
+        "- Verify: column count in JSON = column count in image.\n"
         "- Ensure the JSON is complete and valid - the 'rows' array must contain ALL data rows.\n"
         "- The response must be complete - if you reach max_tokens, you must still include all rows (split if needed, but ensure completeness)."
     )
@@ -565,17 +644,36 @@ def expand_grid_to_requirements(
     print(f"[DEBUG] Expanding grid: {len(columns)} columns, {len(rows)} rows")
     print(f"[DEBUG] Columns: {columns}")
 
-    # Identify SKU/material and remarks columns
+    # Identify SKU/material and remarks columns - intelligently identify by meaning
     col_lower = [c.lower() for c in columns]
     sku_idx = None
     remarks_idx = None
 
-    # 1) Prefer explicit header match
-    header_priority = ["product number", "product id", "sku", "material", "sku code", "product", "code"]
+    # 1) Prefer explicit header match - prioritize SKU/Product Number over Loc
+    # Priority order: SKU and Product Number first, then others, Loc last
+    header_priority = ["sku", "product number", "product id", "material", "item code", "item number", "product code", "part number", "code", "product"]
     for name in header_priority:
-        if name in col_lower:
-            sku_idx = col_lower.index(name)
+        for i, col in enumerate(col_lower):
+            if name in col or col == name:
+                sku_idx = i
+                if debug:
+                    print(f"[DEBUG] Found SKU column '{columns[i]}' (priority match: {name})")
+                break
+        if sku_idx is not None:
             break
+    
+    # 2) If no priority column found, check for Loc (but only if no SKU/Product Number exists)
+    if sku_idx is None:
+        # Check if any priority column exists in the table
+        has_priority_column = any(any(pri in col for pri in ["sku", "product number", "product id", "material"]) for col in col_lower)
+        if not has_priority_column:
+            for i, col in enumerate(col_lower):
+                if "loc" in col and col != "location":
+                    sku_idx = i
+                    if debug:
+                        print(f"[DEBUG] Found SKU column '{columns[i]}' (using Loc as fallback)")
+                    break
+    
     if "remarks" in col_lower:
         remarks_idx = col_lower.index("remarks")
 
@@ -606,8 +704,13 @@ def expand_grid_to_requirements(
     import re as _re
     for i, c in enumerate(columns):
         c_lower = c.lower().strip()
-        # Check for month columns (e.g., "Mar-23", "Apr-23")
-        if _re.match(r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[-']?\s?\d{2,4}$", c, _re.IGNORECASE):
+        # Check for month columns (e.g., "Mar-23", "Apr-23", "May'23", "June'23", "July'23", "Sept'23", "1-May-23", "23-Mar")
+        # Handle both abbreviated (Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec)
+        # and full month names (January, February, March, April, May, June, July, August, September, October, November, December)
+        # Also handle variations like "Sept" for September
+        # Also handle formats like "1-May-23", "1-.1", "23-Mar", "23-Apr" (date columns that might be month indicators)
+        month_pattern = r"^(\d+[-.])?(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|Jun(e)?|Jul(y)?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)[a-zA-Z\-']*\s?\d{2,4}$"
+        if _re.match(month_pattern, c, _re.IGNORECASE):
             month_indices.append(i)
         # Check for "Delivery Date" column
         elif "delivery date" in c_lower:
@@ -638,24 +741,33 @@ def expand_grid_to_requirements(
             if not material:
                 continue
             
-            delivery_date_val = str(values[delivery_date_idx]).strip()
-            receipt_quantity_val = str(values[receipt_quantity_idx]).strip()
+            delivery_date_val = str(values[delivery_date_idx]).strip() if delivery_date_idx < len(values) else ""
+            receipt_quantity_val = str(values[receipt_quantity_idx]).strip() if receipt_quantity_idx < len(values) else ""
             
-            if not delivery_date_val or not receipt_quantity_val:
-                continue
+            # Handle empty cells - treat empty receipt quantity as 0, but still need a date
+            if not delivery_date_val:
+                continue  # Skip if no date
             
-            # Extract numeric quantity from "Receipt Quantity" (e.g., "1 PCE" -> 1)
-            qty_match = _re.search(r"(\d+(?:\.\d+)?)", receipt_quantity_val)
-            if qty_match:
-                qty = float(qty_match.group(1))
-            else:
-                try:
-                    qty = float(receipt_quantity_val)
-                except:
-                    continue
+            # If receipt quantity is empty, treat as 0 but still capture the row
+            if not receipt_quantity_val or receipt_quantity_val in ("", "-", "N/A", "n/a", "None", "####"):
+                receipt_quantity_val = "0"  # Treat empty as zero
             
-            if qty <= 0:
-                continue
+            # Extract numeric quantity from "Receipt Quantity" (e.g., "1 PCE" -> 1, "0" -> 0)
+            # Handle "####" which is Excel's way of showing a number that's too wide - treat as 0 or try to parse
+            qty = 0.0  # Default to 0 if not found
+            if receipt_quantity_val and receipt_quantity_val != "####":
+                qty_match = _re.search(r"(\d+(?:\.\d+)?)", receipt_quantity_val)
+                if qty_match:
+                    qty = float(qty_match.group(1))
+                else:
+                    try:
+                        qty = float(receipt_quantity_val)
+                    except:
+                        # If parsing fails, default to 0 but still capture the row
+                        qty = 0.0
+            # If receipt_quantity_val is "####" or empty, qty is already 0.0
+            
+            # Keep ALL rows including zero quantities - do not skip
             
             # Extract unit
             unit = ""
@@ -775,21 +887,36 @@ def expand_grid_to_requirements(
                         print(f"[DEBUG] CORRECTION: Row {row_idx} SKU {material}: Moved {aug_qty} from Aug-23 to Jul-23")
                 aug_only_rows_count += 1
 
+        # Extract from ALL month columns - do NOT skip any, even if empty
+        # CRITICAL: Each month column must be extracted independently - empty cells are zero, not missing values
         for mi in month_indices:
-            qty_raw = values[mi]
-            try:
-                if isinstance(qty_raw, str):
-                    qty_s = qty_raw.replace(",", "").strip()
-                    qty = float(qty_s) if qty_s else 0.0
-                else:
-                    qty = float(qty_raw or 0)
-            except Exception:
-                qty = 0.0
-            if qty <= 0:
-                continue
+            # Get value for this month column - handle empty cells and "####" values
+            if mi < len(values):
+                qty_raw = values[mi]
+            else:
+                qty_raw = ""  # Empty if column index out of range
+            
+            # Handle empty cells, "####" (Excel formatting issue), and other empty indicators
+            if not qty_raw or str(qty_raw).strip() in ("", "-", "N/A", "n/a", "None", "####", "nan", "NaN"):
+                qty = 0.0  # Treat empty as zero
+            else:
+                try:
+                    if isinstance(qty_raw, str):
+                        qty_s = qty_raw.replace(",", "").strip()
+                        # Handle "####" which is Excel's way of showing a number that's too wide
+                        if qty_s == "####":
+                            qty = 0.0  # Treat as zero (could try to read actual value, but safer to use 0)
+                        else:
+                            qty = float(qty_s) if qty_s else 0.0
+                    else:
+                        qty = float(qty_raw or 0)
+                except Exception:
+                    qty = 0.0  # If parsing fails, default to 0
+            
+            # Keep ALL rows including zero quantities - do not skip
             month_label = columns[mi]
             if debug:
-                print(f"[DEBUG] Adding: SKU={material}, {month_label}={qty}")
+                print(f"[DEBUG] Adding: SKU={material}, {month_label}={qty} (raw={qty_raw})")
             out.append({
                 "customer": customer,
                 "material": material,
@@ -813,18 +940,111 @@ def analyze_text_requirements(bedrock, user_text: str, system_text: Optional[str
 	)
 	instruction = (
 		"Extract all material requirements mentioned. If any tables are described, parse them. "
-		"CRITICAL: Extract ALL non-zero quantities from ALL month/date columns for EVERY row with a valid material code. "
-		"Do NOT skip ANY month columns - check EVERY month column (Mar-23, Apr-23, May-23, Jun-23, Jul-23, Aug-23, Sep-23, Oct-23, Nov-23, Dec-23, Jan-24, Feb-24, Mar-24, Apr-24, May-24, Jun-24, Jul-24, Aug-24, Sep-24, Oct-24, Nov-24, Dec-24, etc.). "
-		"For each row with a material code, create a separate requirement entry for EVERY month/date that has a non-zero quantity value. "
-		"IMPORTANT: When extracting dates, use the EXACT month label from the column header (e.g., 'Jul-23' not 'Jun-23', 'Oct-23' not 'Sep-23', 'Nov-23' not 'Dec-23'). "
-		"Map each quantity to its CORRECT month column - do NOT shift dates to adjacent months. "
-		"Example: If a row has material '59432479' with Mar-23=54465, Apr-23=43572, Jul-23=21786, Oct-23=21786, Nov-23=32679, Apr-24=32679, Jul-24=32679, Oct-24=32679, you must create 8 entries with delivery_date='2023-03-01', '2023-04-01', '2023-07-01', '2023-10-01', '2023-11-01', '2024-04-01', '2024-07-01', '2024-10-01' respectively. "
+		"\n"
+		"THINK LIKE A HUMAN - UNDERSTAND TABLE STRUCTURE:\n"
+		"1. First, understand the table structure by looking at the column headers and data patterns.\n"
+		"2. Identify columns by their MEANING and POSITION, not just exact names.\n"
+		"3. Columns may have different names in different tables - understand what they represent.\n"
+		"\n"
+		"INTELLIGENT COLUMN IDENTIFICATION:\n"
+		"1. MATERIAL/SKU IDENTIFIER COLUMN:\n"
+		"   - Look for columns that contain product codes, SKUs, material IDs, or item identifiers.\n"
+		"   - Common names: 'SKU', 'Product Number', 'Material', 'Item Code', 'Product ID', 'Code', 'Part Number', 'Loc' (if it contains product codes).\n"
+		"   - If there are multiple identifier columns (e.g., 'Loc' and 'SKU'), prefer the one that looks like a product identifier (often 'SKU' or 'Product Number').\n"
+		"   - If 'Loc' contains product codes and 'SKU' contains product codes, use 'SKU' as it's more specific.\n"
+		"   - The material ID should be the actual product identifier (e.g., 'ABC', 'DEF', '80116209', '80435665').\n"
+		"\n"
+		"2. DESCRIPTION COLUMN:\n"
+		"   - Look for columns containing product descriptions, item names, or product short descriptions.\n"
+		"   - Common names: 'Description', 'Product Description', 'Item Description', 'Product Name', 'Product Short Description'.\n"
+		"\n"
+		"3. MONTH/DATE COLUMNS:\n"
+		"   - Look for columns with month-year format headers like 'Mar-23', 'Apr-23', 'May-23', 'Jun-23', 'Jul-23', 'Aug-23', 'Sep-23', 'Oct-23', 'Nov-23', 'Dec-23', 'Jan-24', 'Feb-24', etc.\n"
+		"   - These columns contain quantities for specific months.\n"
+		"   - CRITICAL: Count ALL month columns from first to last - do NOT miss any, including the last one (e.g., 'Aug-23').\n"
+		"   - Extract from EVERY month column, even if the value is zero.\n"
+		"\n"
+		"4. COLUMNS TO IGNORE (NOT month columns):\n"
+		"   - 'Pending', 'Pending 23-Feb', or any 'Pending' column - this is not a month column.\n"
+		"   - 'Batch', 'Batch size', 'Pack Size' - these are not quantities for months.\n"
+		"   - 'Order Leadtime', 'Lead Time', 'Leadtime' - this is a time duration, not a quantity.\n"
+		"   - 'Receipt EI', 'Receipt Qty' (if it's not a month column) - understand context.\n"
+		"   - Any column that is clearly not a month-year format.\n"
+		"\n"
+		"CRITICAL: Extract ALL quantities (INCLUDING ZERO) from ONLY the month/date columns for EVERY row with a valid material code. "
+		"Month columns are those with headers like 'Mar-23', 'Apr-23', 'May-23', 'Jun-23', 'Jul-23', 'Aug-23', etc. "
+		"Do NOT extract from 'Pending', 'Batch size', or other non-month columns. "
+		"\n"
+		"For each row with a material code, create a separate requirement entry for EVERY month column, EVEN IF THE VALUE IS ZERO OR EMPTY. "
+		"IMPORTANT: If a month column shows '0', is blank/empty, or contains no value, you MUST still create an entry with quantity=0 for that month. "
+		"CRITICAL: Store zero values as quantity=0 - do NOT skip them, do NOT ignore them, do NOT omit them. "
+		"CRITICAL: If a cell is empty, treat it as quantity=0 - do NOT use the value from the previous or next month column. "
+		"CRITICAL: Do NOT shift values between months - if a cell is empty, it means quantity=0 for that specific month, NOT the value from another month. "
+		"Every month column must have an entry, even if the value is zero or empty. "
+		"\n"
+		"CRITICAL: Do NOT miss the last month column (e.g., 'Aug-23'). "
+		"Count the month columns in the table header, then ensure you extract from ALL of them. "
+		"If the table has 6 month columns (Mar-23 through Aug-23), you MUST create 6 entries per row. "
+		"If the table has 12 month columns, you MUST create 12 entries per row. "
+		"Do NOT stop early - extract from the FIRST month column through the LAST month column. "
+		"\n"
+		"EXTRACTION METHOD - THINK LIKE A HUMAN:\n"
+		"1. Read the table systematically, row by row, from top to bottom.\n"
+		"2. For each data row:\n"
+		"   a. Identify the material/SKU identifier (from the appropriate column based on meaning, not just name).\n"
+		"   b. Identify the description (if available).\n"
+		"   c. Scan across ALL columns to find month columns (those with month-year headers).\n"
+		"   d. For EACH month column found, extract the value in that column for this row.\n"
+		"   e. Create one entry per month column, even if the value is zero.\n"
+		"\n"
+		"3. COLUMN ALIGNMENT - CRITICAL:\n"
+		"   - Read the table structure first - understand which columns are which.\n"
+		"   - Match values to their column headers by POSITION, not by guessing.\n"
+		"   - If a value is in the column with header 'Mar-23', it belongs to Mar-23.\n"
+		"   - If a value is in the column with header 'Aug-23', it belongs to Aug-23.\n"
+		"   - Do NOT shift values between columns - match each value to its correct column header.\n"
+		"   - CRITICAL: If a cell is empty or blank, it means quantity=0 for that specific month - do NOT use the value from the previous or next month column.\n"
+		"   - CRITICAL: Each month column must be extracted independently - empty cells are zero, not missing values to fill from other months.\n"
+		"\n"
+		"4. COMPLETE EXTRACTION:\n"
+		"   - Count the month columns in the header row.\n"
+		"   - For each data row, extract from ALL month columns you counted.\n"
+		"   - Do NOT stop early - extract from the first month column through the last month column.\n"
+		"   - If you see 6 month columns (e.g., Mar-23 through Aug-23), extract all 6 for each row.\n"
+		"   - If you see 12 month columns, extract all 12 for each row.\n"
+		"\n"
+		"5. EXAMPLE - Understanding table structure:\n"
+		"   Table: 'Loc | SKU | Description | Batch size | Pending | Mar-23 | Apr-23 | May-23 | Jun-23 | Jul-23 | Aug-23'\n"
+		"   Row: '5027 | ABC | ABC | 50,000 | 0 | 5 | 75 | 10 | 1 | 2 | 4'\n"
+		"   Analysis:\n"
+		"   - Column 'Loc' (5027) = location code, NOT material ID\n"
+		"   - Column 'SKU' (ABC) = product identifier, USE THIS as material ID\n"
+		"   - Column 'Description' (ABC) = product description\n"
+		"   - Column 'Batch size' (50,000) = batch information, NOT a month column\n"
+		"   - Column 'Pending' (0) = pending quantity, NOT a month column\n"
+		"   - Columns 'Mar-23' through 'Aug-23' = month columns, extract from ALL 6\n"
+		"   Extract:\n"
+		"   - material=ABC (from SKU), quantity=5, date=2023-03-01 (from Mar-23 column)\n"
+		"   - material=ABC, quantity=75, date=2023-04-01 (from Apr-23 column)\n"
+		"   - material=ABC, quantity=10, date=2023-05-01 (from May-23 column)\n"
+		"   - material=ABC, quantity=1, date=2023-06-01 (from Jun-23 column)\n"
+		"   - material=ABC, quantity=2, date=2023-07-01 (from Jul-23 column)\n"
+		"   - material=ABC, quantity=4, date=2023-08-01 (from Aug-23 column) - DO NOT MISS THIS\n"
+		"\n"
+		"IMPORTANT: When extracting dates, use the EXACT month label from the column header (e.g., 'Mar-23' -> '2023-03-01', 'Apr-23' -> '2023-04-01'). "
+		"Map each quantity to its CORRECT month column based on the column header directly above it. "
+		"\n"
 		"If material code contains additional text (e.g., '59432479 Alloga UK', '66800015 Japan'), extract just the numeric code part (e.g., '59432479', '66800015'). "
 		"Do NOT extract total rows, summary rows, header rows, or rows without material/product ID/SKU. "
 		"Do NOT extract rows that are just customer names or headings without material/quantity data. "
 		"Return ONLY JSON (no markdown) as a list of objects with keys: "
-		"customer (customer name if found in row, otherwise empty), material (material/product ID or code - numeric part only), quantity, unit, delivery_date (date in YYYY-MM-DD format), description (product/item description if available), urgency, notes, source, source_file, row_index. "
-		"For the material field, extract only the numeric product ID/code/SKU part (ignore any additional text after the code). "
+		"customer (customer name if found in row, otherwise empty), material (use the product identifier from the appropriate column - could be 'SKU', 'Product Number', 'Material', etc. - use the column that contains the actual product identifier, NOT location codes), quantity, unit, delivery_date (date in YYYY-MM-DD format), description (product/item description if available), urgency, notes, source, source_file, row_index. "
+		"For the material field, intelligently identify which column contains the product identifier:\n"
+		"   - If there's a 'SKU' column, use that value (e.g., 'ABC', 'DEF').\n"
+		"   - If there's a 'Product Number' or 'Material' column, use that value.\n"
+		"   - If there are both 'Loc' and 'SKU' columns, use 'SKU' (it's more specific to products).\n"
+		"   - If 'Loc' is the only identifier column and contains product codes, you may use it.\n"
+		"   - The material ID should be the actual product identifier (e.g., 'ABC', 'DEF', '80116209', '80435665').\n"
 		"For delivery_date, use the exact month label from the column header converted to ISO format (e.g., 'Jul-23' -> '2023-07-01', 'Nov-23' -> '2023-11-01', 'Jan-24' -> '2024-01-01'). "
 		"If a row has no material/product ID/SKU, skip it entirely. "
 		"CRITICAL: Do NOT extract generic phrases like 'Material Requirements', 'Customer Material Requirements', 'Requirements', 'Material', 'Excel attachment', 'Table', 'Table as image', 'Format', 'Image', 'Attachment', 'Test', 'Welcome', 'Hey' as customer names. "
@@ -879,33 +1099,56 @@ def analyze_image_requirements(
 ) -> List[Dict[str, Any]]:
 	prompt = (
 		"You are extracting order requirements from an image of a table. "
+		"THINK LIKE A HUMAN - UNDERSTAND THE TABLE STRUCTURE FIRST. "
+		"\n"
+		"INTELLIGENT TABLE UNDERSTANDING:\n"
+		"1. First, examine the table structure - look at column headers and understand what each column represents.\n"
+		"2. Column names may vary - identify columns by their MEANING and CONTEXT, not just exact names.\n"
+		"3. Understand the table layout - identify:\n"
+		"   - Product identifier columns (SKU, Product Number, Material, etc.)\n"
+		"   - Description columns\n"
+		"   - Quantity columns (month columns, Receipt Quantity, etc.)\n"
+		"   - Date columns (Delivery Date, month columns, etc.)\n"
+		"   - Other informational columns (Remarks, Comments, etc.)\n"
 		"\n"
 		"CRITICAL EXTRACTION RULES:\n"
 		"1. You MUST extract EVERY SINGLE data row from the table - no exceptions, no omissions.\n"
 		"2. Count the data rows in the image first, then ensure your JSON has the EXACT same number of entries.\n"
 		"3. Include ALL rows that contain a valid product number/material ID/SKU (even if quantity is 0 or blank).\n"
 		"4. Do NOT skip rows, do NOT truncate, do NOT stop early.\n"
-		"5. If you see a product number (like 80435665, 80116209), you MUST include that entire row with all its data.\n"
+		"5. If you see a product number (like 80435665, 80116209, ABC, DEF), you MUST include that entire row with all its data.\n"
 		"\n"
-		"QUANTITY COLUMN IDENTIFICATION:\n"
-		"- CRITICAL: Identify the QUANTITY column correctly. Look for columns named 'Receipt Quantity', 'Quantity', 'Order Quantity', 'Qty', or similar.\n"
-		"- DO NOT confuse 'Order Leadtime' (which is a time duration like '180 days', '90 days') with quantity.\n"
-		"- Quantity should be a number with units (e.g., '1 PCE', '2 PCE', '10 PCE', '100', '50 KG').\n"
-		"- Order Leadtime is NOT quantity - it's the lead time in days.\n"
-		"- Quantity is the actual order amount in the 'Receipt Quantity' column.\n"
+		"INTELLIGENT COLUMN IDENTIFICATION:\n"
+		"1. MATERIAL/PRODUCT IDENTIFIER:\n"
+		"   - Look for columns containing product codes, SKUs, material IDs.\n"
+		"   - Common names: 'Product Number', 'SKU', 'Material', 'Item Code', 'Product ID', 'Code', 'Part Number'.\n"
+		"   - If both 'Loc' and 'SKU' exist, typically 'SKU' is the product identifier.\n"
+		"\n"
+		"2. QUANTITY COLUMNS:\n"
+		"   - Month columns: Headers like 'Mar-23', 'Apr-23', 'May-23', 'Jun-23', 'Jul-23', 'Aug-23', etc.\n"
+		"   - Receipt Quantity: Column named 'Receipt Quantity', 'Quantity', 'Order Quantity', 'Qty', or similar.\n"
+		"   - DO NOT confuse 'Order Leadtime' (time duration like '180 days') with quantity.\n"
+		"   - DO NOT use 'Batch size' or 'Pack Size' as quantity.\n"
+		"   - Quantity should be a number with units (e.g., '1 PCE', '2 PCE', '10 PCE', '100', '50 KG').\n"
+		"\n"
+		"3. DATE COLUMNS:\n"
+		"   - 'Delivery Date' column with specific dates.\n"
+		"   - Month columns (Mar-23, Apr-23, etc.) represent months.\n"
 		"\n"
 		"EXTRACTION FORMATS:\n"
-		"- If the table has 'Delivery Date' and 'Receipt Quantity' columns: extract ONE JSON row per data row in the table.\n"
-		"- Map: Product Number/Product ID/SKU -> material (numeric part only), Delivery Date -> delivery_date, Receipt Quantity -> quantity.\n"
-		"- For example: if Receipt Quantity is '1 PCE', extract quantity=1 and unit='PCE'.\n"
-		"- If the table has month columns (e.g., Mar-23, Apr-23): emit ONE JSON row per non-zero month value for each SKU.\n"
+		"- If the table has 'Delivery Date' and 'Receipt Quantity' columns: extract ONE JSON row per data row.\n"
+		"- Map: Product identifier -> material, Delivery Date -> delivery_date, Receipt Quantity -> quantity.\n"
+		"- CRITICAL: If a cell is empty or blank, treat it as quantity=0 - do NOT skip it, do NOT use value from another column.\n"
+		"- If the table has month columns (e.g., Mar-23, Apr-23): emit ONE JSON row per month value (including zero and empty) for each SKU.\n"
+		"- CRITICAL: Count ALL month columns and extract from ALL of them - do NOT miss any, including the last one.\n"
+		"- CRITICAL: If a month cell is empty or blank, extract it as quantity=0 for that specific month - do NOT use the value from the previous or next month.\n"
+		"- CRITICAL: Do NOT shift values between months - each month column must be extracted independently.\n"
 		"\n"
 		"EXCLUSION RULES:\n"
 		"- Do NOT extract total rows, summary rows, header rows, or rows without material/product ID/SKU.\n"
 		"- Do NOT extract rows that are just customer names or headings without material/quantity data.\n"
 		"- If 'Remarks' contains 'Dropped', skip that SKU.\n"
-		"- If a Batch size column exists, do not treat it as quantity.\n"
-		"- Do not include rows where quantity is 0 or blank (but still extract the row if it has a valid product number).\n"
+		"- Include ALL rows with valid product numbers, even if quantity is 0 or blank.\n"
 		"\n"
 		"DATE FORMATTING:\n"
 		"- For dates like '01-Mar-25', convert to ISO format '2025-03-01'.\n"
