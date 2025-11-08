@@ -626,6 +626,77 @@ def refine_projection_with_image(
     return obj
 
 
+def verify_row_months_with_image(
+	bedrock,
+	image_bytes: bytes,
+	image_format: str,
+	sku_value: str,
+	month_columns: List[str],
+	debug: bool = False,
+) -> Optional[Dict[str, float]]:
+	"""Ask the VLM to read exact month values for a specific SKU row."""
+	if not sku_value or not month_columns:
+		return None
+	month_list = ", ".join(month_columns)
+	prompt = (
+		f"You are looking at a supply plan table image. Focus ONLY on the row whose SKU cell contains '{sku_value}'. "
+		f"Read the numbers under these column headers: {month_list}. "
+		"Return a JSON object mapping each column name to the numeric value exactly as shown in the image. "
+		"If the cell is blank or zero, return 0. Do not infer or average numbers. "
+		"Example format: {\"Mar-23\": 0, \"Apr-23\": 0}."
+	)
+	raw = converse_image(bedrock, image_bytes, image_format, prompt, max_tokens=2048)
+	if debug:
+		print(f"[DEBUG] Month verification raw output for SKU {sku_value}:")
+		print(raw[:4000])
+	data = _json_guard(raw)
+	if not data:
+		return None
+	obj = data[0] if isinstance(data, list) and data else data
+	if not isinstance(obj, dict):
+		return None
+	result: Dict[str, float] = {}
+	for col in month_columns:
+		val = obj.get(col)
+		try:
+			result[col] = float(str(val).replace(",", "").strip()) if val is not None else 0.0
+		except Exception:
+			result[col] = 0.0
+	return result
+
+
+def reconcile_grid_with_image(
+	bedrock,
+	image_bytes: bytes,
+	image_format: str,
+	grid: Dict[str, Any],
+	debug: bool = False,
+) -> Dict[str, Any]:
+	"""Ask the VLM to validate that every value in the grid sits under the correct column."""
+	prompt = (
+		"You are given an image of a production plan table and the JSON grid that was parsed from it. "
+		"Re-read the table from the image (do not rely on the JSON blindly). "
+		"For each SKU row, verify every numeric value under each month column (Mar-23, Apr-23, May-23, Jun-23, Jul-23, Aug-23) "
+		"and Rolling Projection column. If any value in the JSON is under the wrong month or missing entirely, correct it so the JSON "
+		"matches the exact numbers you see in the image. "
+		"When a cell is blank in the image, set the value to 0 in the JSON. "
+		"Return ONLY the corrected grid JSON with the same keys 'columns' and 'rows'. Preserve the number of rows."
+	)
+	grid_text = _json_dumps(grid)
+	vlm_prompt = f"{prompt}\n\nGRID:\n{grid_text}"
+	raw = converse_image(bedrock, image_bytes, image_format, vlm_prompt, max_tokens=8192)
+	if debug:
+		print("[DEBUG] Grid reconciliation raw output:")
+		print(raw[:4000])
+	data = _json_guard(raw)
+	if not data:
+		return grid
+	obj = data[0] if isinstance(data, list) else data
+	if not isinstance(obj, dict) or "columns" not in obj or "rows" not in obj:
+		return grid
+	return obj
+
+
 def expand_grid_to_requirements(
     grid: Dict[str, Any],
     source: str,

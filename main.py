@@ -11,8 +11,19 @@ import pandas as pd
 from bedrock_client import get_bedrock_client
 from parsers.eml_parser import parse_eml_bytes
 from parsers.xlsx_parser import read_xlsx_file, read_xlsx_bytes
-from analysis import analyze_text_requirements, analyze_image_requirements, analyze_image_table_grid, expand_grid_to_requirements, correct_grid_months, refine_projection_with_image
+from analysis import (
+	analyze_text_requirements,
+	analyze_image_requirements,
+	analyze_image_table_grid,
+	expand_grid_to_requirements,
+	correct_grid_months,
+	reconcile_grid_with_image,
+	refine_projection_with_image,
+	verify_row_months_with_image,
+	_normalize_date_to_iso,
+)
 from ingest.imap_fetcher import fetch_emails
+from parsers.html_table_parser import extract_tables_from_html
 
 
 SUPPORTED_XLSX_EXTS = {".xlsx"}
@@ -461,7 +472,6 @@ def _extract_requirements_from_excel_row(rec: Dict[str, Any], bedrock, customer:
                 
                 # Keep ALL rows including zero quantities
                 # Normalize date to ISO format (YYYY-MM-DD)
-                from analysis import _normalize_date_to_iso
                 delivery_date_iso = _normalize_date_to_iso(delivery_date_val)
                 
                 requirements.append({
@@ -502,7 +512,6 @@ def _extract_requirements_from_excel_row(rec: Dict[str, Any], bedrock, customer:
         # Keep ALL rows including zero quantities - do not skip
         
         # Normalize month label to ISO date (YYYY-MM-DD)
-        from analysis import _normalize_date_to_iso
         delivery_date = _normalize_date_to_iso(month_col)
         
         requirements.append({
@@ -572,7 +581,6 @@ def _sanitize_rows(rows: List[Dict[str, Any]], customer: str, source: str, sourc
         # Normalize delivery_date to ISO format (YYYY-MM-DD) for consistent pivot tables
         delivery_date = str(item.get("delivery_date", "") or "").strip()
         if delivery_date:
-            from analysis import _normalize_date_to_iso
             # Normalize any date format to ISO format (YYYY-MM-DD)
             out["delivery_date"] = _normalize_date_to_iso(delivery_date)
         
@@ -656,7 +664,6 @@ def main(input_dir: str, out: str, region: str, dry_run: bool, max_files: int, i
 	
 	# Normalize all dates to ISO format (YYYY-MM-DD) for consistent pivot tables
 	if "date" in df.columns:
-		from analysis import _normalize_date_to_iso
 		# Convert all dates to ISO format
 		def normalize_date(date_val):
 			if pd.isna(date_val) or date_val == "":
@@ -690,19 +697,6 @@ def main(input_dir: str, out: str, region: str, dry_run: bool, max_files: int, i
 			if conflicts:
 				df = df.drop(conflicts)
 				print(f"Removed {len(conflicts)} email-text row(s) for materials that exist in Excel data (Excel is authoritative)")
-	
-	# Remove duplicates based on customer, material, date, and quantity
-	# Prioritize Excel data (email-xlsx) over email-text
-	before_dedup = len(df)
-	# Sort by source priority: email-xlsx first, then others
-	if "source" in df.columns and len(df) > 0:
-		df["_priority"] = df["source"].apply(lambda x: 0 if "email-xlsx" in str(x) or str(x) == "xlsx" else 1)
-		df = df.sort_values("_priority")
-		df = df.drop(columns=["_priority"])
-	df = df.drop_duplicates(subset=["customer_name", "id", "date", "quantity"], keep="first")
-	after_dedup = len(df)
-	if before_dedup > after_dedup:
-		print(f"Removed {before_dedup - after_dedup} duplicate row(s)")
 	
 	# Required columns as per user requirements (excluding source, source_file, row_index)
 	df_columns = [
@@ -785,6 +779,23 @@ def handle_eml_bytes(raw_bytes: bytes, label: str, bedrock, dry_run: bool, debug
 		email_customer = parsed.sender  # Fallback to sender if not found
 	
 	rows: List[Dict[str, Any]] = []
+	skip_text_model = False
+
+	# Parse HTML tables directly to avoid LLM misalignment on structured data
+	if parsed.html_raw:
+		html_tables = extract_tables_from_html(parsed.html_raw)
+		if html_tables and debug:
+			print(f"[DEBUG] Found {len(html_tables)} HTML table(s) in email body")
+		for idx, table in enumerate(html_tables or []):
+			table_source = f"{label}#html-table-{idx + 1}"
+			if debug:
+				print(f"[DEBUG] Processing HTML table {idx + 1}: columns={len(table.get('columns', []))}, rows={len(table.get('rows', []))}")
+			html_rows = expand_grid_to_requirements(table, "email-html", table_source, email_customer, debug=debug)
+			if not html_rows:
+				continue
+			rows.extend(_sanitize_rows(html_rows, email_customer, "email-html", table_source))
+		if rows:
+			skip_text_model = True
 	if debug:
 		print(f"EMAIL IMAP: subject={parsed.subject} from={parsed.sender} recipients={parsed.recipients} images={len(parsed.images)} xlsx={len(parsed.xlsx_attachments)}")
 		if email_customer != parsed.sender:
@@ -807,7 +818,7 @@ def handle_eml_bytes(raw_bytes: bytes, label: str, bedrock, dry_run: bool, debug
 				"source_file": f"{label}",
 				"row_index": None,
 			})
-		else:
+		elif not skip_text_model:
 			text_rows = analyze_text_requirements(
 				bedrock,
 				user_text=full_text,
@@ -863,7 +874,94 @@ def handle_eml_bytes(raw_bytes: bytes, label: str, bedrock, dry_run: bool, debug
 					grid = correct_grid_months(bedrock, grid, debug=debug)
 				elif debug:
 					print("[DEBUG] Skipping month correction (no Jul-23/Aug-23 columns)")
+
+				# Run a reconciliation pass against the original image to fix any column misalignment
+				grid = reconcile_grid_with_image(
+					bedrock,
+					image_bytes=img_bytes,
+					image_format=fmt,
+					grid=grid,
+					debug=debug,
+				)
+				# Try to refine the rolling projection columns; keep original values if refinement clears them
+				refined_grid = refine_projection_with_image(
+					bedrock,
+					image_bytes=img_bytes,
+					image_format=fmt,
+					grid=grid,
+					debug=debug,
+				)
+				if refined_grid and isinstance(refined_grid, dict) and refined_grid.get("rows"):
+					try:
+						def _merge_grids(base, candidate):
+							base_rows = base.get("rows", [])
+							candidate_rows = candidate.get("rows", [])
+							if len(base_rows) != len(candidate_rows):
+								return base
+							merged_rows = []
+							for base_row, cand_row in zip(base_rows, candidate_rows):
+								merged = dict(base_row)
+								for key, value in cand_row.items():
+									if key not in merged:
+										continue
+									try:
+										base_val = float(str(merged[key]).replace(',', '').strip() or 0)
+										cand_val = float(str(value).replace(',', '').strip() or 0)
+									except Exception:
+										merged[key] = value
+										continue
+									if cand_val == 0 and base_val != 0:
+										continue
+									if base_val == 0 and cand_val != 0:
+										merged[key] = value
+									elif cand_val != base_val:
+										# Prefer candidate only if base is zero or candidate greatly larger
+										if cand_val > base_val:
+											merged[key] = value
+								merged_rows.append(merged)
+							return {"columns": base.get("columns", []), "rows": merged_rows}
+						grid = _merge_grids(grid, refined_grid)
+					except Exception:
+						grid = grid
+
 				image_rows = expand_grid_to_requirements(grid, "email-image", f"{label}", email_customer, debug=debug)
+
+				# Targeted verification for each SKU/month if zeros remain
+				try:
+					month_columns = []
+					for col_name in grid.get("columns", []):
+						if '-23' in str(col_name) or '-24' in str(col_name):
+							month_columns.append(str(col_name))
+					if month_columns:
+						for idx, row in enumerate(grid.get("rows", [])):
+							sku_val = ""
+							if isinstance(row, dict):
+								sku_val = str(row.get("SKU") or row.get("sku") or "")
+							if not sku_val:
+								continue
+							verification = verify_row_months_with_image(
+								bedrock,
+								image_bytes=img_bytes,
+								image_format=fmt,
+								sku_value=sku_val,
+								month_columns=month_columns,
+								debug=debug,
+							)
+							if not verification:
+								continue
+							for result_row in image_rows:
+								if result_row.get("material") and result_row["material"] in sku_val:
+									month_date = result_row.get("delivery_date")
+									for col in month_columns:
+										if _normalize_date_to_iso(col) == month_date:
+											new_qty = verification.get(col)
+											if new_qty is None:
+												continue
+											result_row["quantity"] = new_qty
+				except Exception:
+					if debug:
+						print("[DEBUG] Month verification step failed; proceeding with existing grid values")
+
 				if debug:
 					print(f"[DEBUG] Grid expansion returned {len(image_rows)} rows")
 			else:

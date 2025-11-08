@@ -16,6 +16,7 @@ class ParsedEmail:
 		self.date: str = ""
 		self.plain_text: str = ""
 		self.html_text: str = ""
+		self.html_raw: str = ""
 		self.images: List[Tuple[str, bytes]] = []  # (ext, bytes)
 		self.xlsx_attachments: List[Tuple[str, bytes]] = []  # (filename, bytes)
 
@@ -53,7 +54,7 @@ def _parse_msg(msg, source_label: str) -> ParsedEmail:
 	parsed.date = msg.get("date", "") or ""
 
 	plain_parts: List[str] = []
-	html_parts: List[str] = []
+	html_parts_raw: List[str] = []
 
 	if msg.is_multipart():
 		for part in msg.walk():
@@ -66,7 +67,7 @@ def _parse_msg(msg, source_label: str) -> ParsedEmail:
 					continue
 			elif content_type == "text/html" and "attachment" not in disposition:
 				try:
-					html_parts.append(part.get_content())
+					html_parts_raw.append(part.get_content())
 				except Exception:
 					continue
 			elif content_type.startswith("image/"):
@@ -95,10 +96,11 @@ def _parse_msg(msg, source_label: str) -> ParsedEmail:
 		if content_type == "text/plain":
 			plain_parts.append(msg.get_content())
 		elif content_type == "text/html":
-			html_parts.append(msg.get_content())
+			html_parts_raw.append(msg.get_content())
 
 	parsed.plain_text = "\n\n".join(p.strip() for p in plain_parts if p).strip()
-	parsed.html_text = "\n\n".join(_html_to_text(h) for h in html_parts if h).strip()
+	parsed.html_raw = "\n\n".join(h for h in html_parts_raw if h).strip()
+	parsed.html_text = "\n\n".join(_html_to_text(h) for h in html_parts_raw if h).strip()
 	return parsed
 
 
