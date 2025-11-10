@@ -38,10 +38,12 @@ SMTP_CONFIG = {
 
 OUTPUT_FILE = "requirements_output.xlsx"
 PROCESSING_STATUS = {"status": "idle", "message": "", "rows_count": 0, "last_updated": None}
+LAST_PROCESSED_DATA = {"columns": [], "rows": []}
 
 def process_emails_async():
     """Run email processing in background thread"""
     global PROCESSING_STATUS
+    global LAST_PROCESSED_DATA
     try:
         PROCESSING_STATUS["status"] = "processing"
         PROCESSING_STATUS["message"] = "Starting email processing..."
@@ -76,6 +78,7 @@ def process_emails_async():
                 PROCESSING_STATUS["message"] = "No requirements extracted from emails."
                 PROCESSING_STATUS["rows_count"] = 0
                 PROCESSING_STATUS["last_updated"] = datetime.now().isoformat()
+                LAST_PROCESSED_DATA = {"columns": [], "rows": []}
                 return
             
             # Create DataFrame and save
@@ -101,6 +104,11 @@ def process_emails_async():
                     df[col] = ""
             df = df[df_columns]
             
+            records = df.fillna("").to_dict(orient="records")
+            LAST_PROCESSED_DATA = {
+                "columns": df_columns,
+                "rows": records,
+            }
             df.to_excel(OUTPUT_FILE, index=False)
             
             row_count = len(df)
@@ -143,20 +151,35 @@ def get_status():
 @app.route('/api/data')
 def get_data():
     """Get processed data as JSON"""
-    if not os.path.exists(OUTPUT_FILE):
-        return jsonify({"error": "No data file found"}), 404
-    
-    try:
-        df = pd.read_excel(OUTPUT_FILE)
-        # Convert to JSON-friendly format
-        data = df.fillna("").to_dict(orient='records')
+    global LAST_PROCESSED_DATA
+    if LAST_PROCESSED_DATA["columns"] or LAST_PROCESSED_DATA["rows"]:
         return jsonify({
-            "columns": list(df.columns),
-            "data": data,
-            "row_count": len(df)
+            "columns": LAST_PROCESSED_DATA["columns"],
+            "data": LAST_PROCESSED_DATA["rows"],
+            "row_count": len(LAST_PROCESSED_DATA["rows"])
         })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    
+    # Fallback to existing Excel file only if we have never processed during this server session
+    if PROCESSING_STATUS.get("last_updated") is None:
+        if not os.path.exists(OUTPUT_FILE):
+            return jsonify({"error": "No data file found"}), 404
+        
+        try:
+            df = pd.read_excel(OUTPUT_FILE)
+            data = df.fillna("").to_dict(orient='records')
+            return jsonify({
+                "columns": list(df.columns),
+                "data": data,
+                "row_count": len(df)
+            })
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    
+    return jsonify({
+        "columns": [],
+        "data": [],
+        "row_count": 0
+    })
 
 @app.route('/api/download')
 def download_file():
