@@ -3,29 +3,18 @@ import io
 import json
 import mimetypes
 import re
-from datetime import datetime, timedelta
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any
 
 import click
 import pandas as pd
 
 from bedrock_client import get_bedrock_client
 from parsers.eml_parser import parse_eml_bytes
-from parsers.xlsx_parser import read_xlsx_file, read_xlsx_bytes
-from analysis import (
-	analyze_text_requirements,
-	analyze_image_requirements,
-	analyze_image_table_grid,
-	expand_grid_to_requirements,
-	correct_grid_months,
-	reconcile_grid_with_image,
-	refine_projection_with_image,
-	verify_row_months_with_image,
-	resolve_image_month_headers,
-	_normalize_date_to_iso,
-)
+from parsers.xlsx_parser import read_xlsx_file
+from analysis import _normalize_date_to_iso
 from ingest.imap_fetcher import fetch_emails
-from parsers.html_table_parser import extract_tables_from_html
+from processors.common import dedupe_requirements, sanitize_rows
+from processors import excel_processor, html_processor, image_processor, text_processor
 
 
 SUPPORTED_XLSX_EXTS = {".xlsx"}
@@ -45,87 +34,6 @@ def should_process_email(parsed_email) -> bool:
 	# Check if TARGET_EMAIL is in recipients (case-insensitive)
 	target_lower = TARGET_EMAIL.lower()
 	return any(target_lower in r for r in parsed_email.recipients)
-
-
-def _coerce_number(value) -> float:
-    try:
-        if isinstance(value, str):
-            v = value.replace(",", "").strip()
-            return float(v) if v else 0.0
-        return float(value)
-    except Exception:
-        return 0.0
-
-
-def _clean_material_code(material: str) -> str:
-    """Clean material code - extract numeric part and skip Excel formatting artifacts like '#####'.
-    Examples: '59432479 Alloga UK' -> '59432479', '66800015 Japan' -> '66800015'
-    """
-    if not material:
-        return ""
-    material = str(material).strip()
-    # Skip Excel formatting artifacts
-    if material in ("####", "#####", "-", "N/A", "n/a", "None", ""):
-        return ""
-    # If it starts with digits, extract the leading numeric part
-    import re
-    match = re.match(r'^(\d+)', material)
-    if match:
-        return match.group(1)
-    # Otherwise return as-is
-    return material
-
-
-def _dedupe_with_existing(
-    rows_to_add: List[Dict[str, Any]],
-    existing_keys: set,
-    allowed_ranges: Dict[str, Tuple[datetime, datetime]] = None,
-) -> List[Dict[str, Any]]:
-    """Filter out rows whose (material, delivery_date) already exist."""
-    filtered: List[Dict[str, Any]] = []
-    for row in rows_to_add:
-        material = row.get("material") or ""
-        delivery = row.get("delivery_date") or ""
-        if allowed_ranges and material in allowed_ranges and delivery:
-            try:
-                dt = datetime.fromisoformat(delivery)
-            except Exception:
-                dt = None
-            if dt:
-                lower, upper = allowed_ranges[material]
-                if dt < lower or dt > upper:
-                    continue
-        key = (material, delivery)
-        if material and delivery:
-            if key in existing_keys:
-                continue
-            existing_keys.add(key)
-        filtered.append(row)
-    return filtered
-
-
-def _has_delivery_gaps(rows: List[Dict[str, Any]]) -> bool:
-    """Detect month gaps for each material within the provided rows."""
-    by_material: Dict[str, List[datetime]] = {}
-    for row in rows:
-        material = row.get("material")
-        delivery = row.get("delivery_date")
-        if not material or not delivery:
-            continue
-        try:
-            dt = datetime.fromisoformat(delivery)
-        except Exception:
-            continue
-        by_material.setdefault(material, []).append(dt)
-    for dates in by_material.values():
-        if len(dates) < 2:
-            continue
-        dates.sort()
-        for prev, curr in zip(dates, dates[1:]):
-            month_diff = (curr.year - prev.year) * 12 + (curr.month - prev.month)
-            if month_diff > 1:
-                return True
-    return False
 
 
 def _extract_customer_from_email(parsed) -> str:
@@ -277,373 +185,6 @@ def _extract_customer_from_email(parsed) -> str:
     return customer
 
 
-def _extract_requirements_from_excel_row(rec: Dict[str, Any], bedrock, customer: str, email_customer: str, source: str, source_file: str, row_idx: int, debug: bool = False) -> List[Dict[str, Any]]:
-    """Directly extract requirements from an Excel row by programmatically processing month columns.
-    This avoids LLM date mapping errors by directly reading month column headers.
-    """
-    import re as _re
-    
-    # Identify month columns
-    # Handle both abbreviated (Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec)
-    # and full month names (January, February, March, April, May, June, July, August, September, October, November, December)
-    # Also handle variations like "June", "July", "Sept" for September
-    # Also handle formats like "1-May-23", "1-.1", "23-Mar", "23-Apr" (date columns that might be month indicators)
-    month_pattern = _re.compile(r"^(\d+[-.])?(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|Jun(e)?|Jul(y)?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)[a-zA-Z\-']*\s?\d{2,4}$", _re.IGNORECASE)
-    month_cols = []
-    other_cols = {}
-    
-    for k, v in rec.items():
-        # Include all values, even NaN/empty - we'll handle them later
-        # This ensures we capture ALL month columns, even if some cells are empty
-        if month_pattern.match(str(k).strip()):
-            # Store month column even if value is NaN/empty - we'll treat empty as 0
-            month_cols.append((str(k).strip(), v if v == v else None))
-        else:
-            other_cols[str(k).strip()] = v
-    
-    # Extract material code from other columns - intelligently identify the product identifier column
-    # Priority order: prefer SKU/Product Number over Loc when both exist
-    id_candidates_priority = ["SKU", "Product Number", "Product ID", "Item Code", "Item Number", "Material", "Code", "Part #", "Part Number", "Supplier Part #", "Product Code", "Item"]
-    # Also check for Item Description as fallback if no material code found
-    id_candidates_fallback = ["Item Description", "Item Descrip", "Description", "Product Description"]
-    # Also check for Loc, but with lower priority
-    id_candidates_lower_priority = ["Loc", "Location"]
-    
-    material = ""
-    # First, try priority candidates (SKU, Product Number, etc.)
-    for col_name in id_candidates_priority:
-        for k, v in other_cols.items():
-            k_lower = str(k).strip().lower()
-            col_lower = col_name.lower().strip()
-            # More flexible matching - check if column name contains or equals the candidate
-            if col_lower in k_lower or k_lower in col_lower or k_lower == col_lower:
-                material = str(v).strip() if v == v else ""
-                # Skip "#####" which is Excel's way of showing a number that's too wide - not a material code
-                if material and material not in ("-", "N/A", "n/a", "None", "", "####", "#####"):
-                    material = _clean_material_code(material)
-                    if material and material not in ("####", "#####"):  # Double check after cleaning
-                        if debug and material:
-                            print(f"[DEBUG] Found material code '{material}' in column '{k}'")
-                        break
-        if material:
-            break
-    
-    # If no material found in priority columns, try lower priority (Loc) only if no SKU/Product Number exists
-    if not material:
-        # Check if any priority column exists in the table
-        has_priority_column = False
-        for col_name in id_candidates_priority:
-            for k in other_cols.keys():
-                k_lower = str(k).strip().lower()
-                col_lower = col_name.lower().strip()
-                if col_lower in k_lower or k_lower in col_lower or k_lower == col_lower:
-                    has_priority_column = True
-                    break
-            if has_priority_column:
-                break
-        
-        # Only use Loc if no priority column exists
-        if not has_priority_column:
-            for col_name in id_candidates_lower_priority:
-                for k, v in other_cols.items():
-                    k_lower = str(k).strip().lower()
-                    col_lower = col_name.lower().strip()
-                    if col_lower in k_lower or k_lower in col_lower or k_lower == col_lower:
-                        material = str(v).strip() if v == v else ""
-                        # Skip "#####" which is Excel's way of showing a number that's too wide - not a material code
-                        if material and material not in ("-", "N/A", "n/a", "None", "", "####", "#####"):
-                            material = _clean_material_code(material)
-                            if material and material not in ("####", "#####"):  # Double check after cleaning
-                                if debug and material:
-                                    print(f"[DEBUG] Found material code '{material}' in column '{k}' (using Loc as fallback)")
-                                break
-                if material:
-                    break
-    
-    # If no material found in priority columns, try Item Description as fallback
-    if not material:
-        for col_name in id_candidates_fallback:
-            for k, v in other_cols.items():
-                k_lower = str(k).strip().lower()
-                col_lower = col_name.lower().strip()
-                # More flexible matching - check if column name contains or equals the candidate
-                if col_lower in k_lower or k_lower in col_lower or k_lower == col_lower:
-                    material = str(v).strip() if v == v else ""
-                    # Skip "#####" which is Excel's way of showing a number that's too wide - not a material code
-                    if material and material not in ("-", "N/A", "n/a", "None", "", "####", "#####"):
-                        # For descriptions like "WLG - 1", extract the meaningful part
-                        # Try to extract code from format like "WLG - 1" -> "WLG" or "1"
-                        import re as _re_desc
-                        # If it has format "XXX - YYY", extract XXX or YYY
-                        desc_match = _re_desc.match(r'^([A-Z0-9]+)\s*-\s*(\d+)$', material)
-                        if desc_match:
-                            # Prefer the numeric part if it exists, otherwise use the prefix
-                            material = desc_match.group(2) or desc_match.group(1)
-                        else:
-                            material = _clean_material_code(material)
-                        if material and material not in ("####", "#####"):  # Double check after cleaning
-                            if debug and material:
-                                print(f"[DEBUG] Found material code '{material}' in column '{k}' (using Item Description as fallback)")
-                            break
-            if material:
-                break
-    
-    if not material:
-        # If no material code found, try to extract from all non-month columns using LLM
-        other_text = ", ".join([f"{k}={v}" for k, v in other_cols.items()])
-        if bedrock and other_text:
-            if debug:
-                print(f"[DEBUG] Row {row_idx}: No material code found in standard columns, trying LLM extraction. Columns: {list(other_cols.keys())}")
-            try:
-                # Use LLM to extract just the material code
-                material_text = analyze_text_requirements(
-                    bedrock,
-                    user_text=f"Row data: {other_text}. Extract ONLY the material/product ID/code/SKU (numeric part only). If material code has additional text like '59432479 Alloga UK', extract just '59432479'. Return JSON with material field only.",
-                    system_text="Extract material code from the row data. Return JSON: {\"material\": \"code\"}",
-                    source=source,
-                    source_file=source_file,
-                    debug=debug,
-                )
-                if material_text and len(material_text) > 0:
-                    material = _clean_material_code(str(material_text[0].get("material", "") or ""))
-                    if debug and material:
-                        print(f"[DEBUG] LLM extracted material code: '{material}'")
-            except Exception as e:
-                if debug:
-                    print(f"[DEBUG] LLM extraction failed: {e}")
-                pass
-    
-    if not material:
-        return []  # Skip rows without material code
-    
-    # Extract description (product/item description) - will be put in notes field
-    description = ""
-    description_candidates = ["Item Description", "Description", "Product Description", "Product Name", "Item Name"]
-    for col_name in description_candidates:
-        for k, v in other_cols.items():
-            if col_name.lower() in k.lower():
-                description = str(v).strip() if v == v else ""
-                if description:
-                    break
-        if description:
-            break
-    
-    # Extract notes (separate from description)
-    notes_text = ""
-    notes_candidates = ["Notes", "Note", "Remarks"]
-    for col_name in notes_candidates:
-        for k, v in other_cols.items():
-            if col_name.lower() in k.lower():
-                notes_text = str(v).strip() if v == v else ""
-                if notes_text:
-                    break
-        if notes_text:
-            break
-    
-    # Combine description with notes (description goes to notes field like before)
-    # If both exist, combine them; otherwise use whichever exists
-    final_notes = ""
-    if description and notes_text:
-        final_notes = f"{description} | {notes_text}"
-    elif description:
-        final_notes = description
-    elif notes_text:
-        final_notes = notes_text
-    
-    # Check for dropped SKUs
-    if "dropped" in (final_notes.lower()):
-        return []  # Skip dropped SKUs
-    
-    # Extract customer name if available (priority: Excel row > email subject/body > email sender)
-    customer_candidates = ["Customer", "Customer Name", "Company"]
-    row_customer = ""
-    for col_name in customer_candidates:
-        for k, v in other_cols.items():
-            if col_name.lower() in k.lower():
-                row_customer = str(v).strip() if v == v else ""
-                if row_customer:
-                    break
-        if row_customer:
-            break
-    
-    # Priority: Excel row customer > email subject/body customer > email sender (fallback)
-    final_customer = row_customer or email_customer or customer or ""
-    
-    # Extract unit if available
-    unit = ""
-    unit_candidates = ["Unit of Measure", "Unit", "Units", "UOM", "Batch size", "Pack Size"]
-    for col_name in unit_candidates:
-        for k, v in other_cols.items():
-            if col_name.lower() in k.lower():
-                unit = str(v).strip() if v == v else ""
-                if unit:
-                    break
-        if unit:
-            break
-    
-    # Check if we have "Delivery Date" and "Receipt Quantity" columns (one row per Excel row)
-    delivery_date_col = None
-    receipt_quantity_col = None
-    
-    for k in other_cols.keys():
-        k_lower = str(k).strip().lower()
-        if "delivery date" in k_lower:
-            delivery_date_col = k
-        if "receipt quantity" in k_lower:
-            receipt_quantity_col = k
-    
-    requirements = []
-    
-    # If we have Delivery Date and Receipt Quantity columns, extract one requirement per row
-    if delivery_date_col and receipt_quantity_col:
-        delivery_date_val = str(other_cols.get(delivery_date_col, "")).strip()
-        receipt_quantity_val = str(other_cols.get(receipt_quantity_col, "")).strip()
-        
-        # Handle empty cells - treat empty receipt quantity as 0, but still need a date
-        if delivery_date_val:  # Only process if we have a date
-            # If receipt quantity is empty, treat as 0 but still capture the row
-            if not receipt_quantity_val or receipt_quantity_val.strip() in ("", "-", "N/A", "n/a", "None", "####", "nan", "NaN"):
-                receipt_quantity_val = "0"  # Treat empty as zero
-            
-            # Extract numeric quantity from "Receipt Quantity" (e.g., "1 PCE" -> 1)
-            # Handle "####" which is Excel's way of showing a number that's too wide
-            qty_str = receipt_quantity_val.strip()
-            if qty_str == "####":
-                qty = 0.0  # Treat as zero
-            else:
-                # Try to extract numeric part
-                qty_match = _re.search(r"(\d+(?:\.\d+)?)", qty_str)
-                if qty_match:
-                    qty = _coerce_number(qty_match.group(1))
-                else:
-                    qty = _coerce_number(receipt_quantity_val)
-                
-                # If unit wasn't found in "Unit of Measure", try to extract from "Receipt Quantity"
-                if not unit and receipt_quantity_val:
-                    unit_match = _re.search(r"\d+\s*([A-Za-z]+)", receipt_quantity_val)
-                    if unit_match:
-                        unit = unit_match.group(1).strip()
-                
-                # Keep ALL rows including zero quantities
-                # Normalize date to ISO format (YYYY-MM-DD)
-                delivery_date_iso = _normalize_date_to_iso(delivery_date_val)
-                
-                requirements.append({
-                    "customer": final_customer,
-                    "material": material,
-                    "quantity": qty,
-                    "unit": unit,
-                    "delivery_date": delivery_date_iso,
-                    "urgency": "",
-                    "description": description,
-                    "notes": final_notes,
-                    "source": source,
-                    "source_file": source_file,
-                    "row_index": row_idx,
-                })
-                if debug:
-                    print(f"[DEBUG] Row {row_idx}: Extracted requirement - material={material}, quantity={qty}, unit={unit}, delivery_date={delivery_date_iso}")
-    
-    # Also extract requirements from month columns (if any)
-    # CRITICAL: Extract from ALL month columns, even if empty - treat empty as zero
-    for month_col, qty_val in month_cols:
-        # Handle empty cells, "####" (Excel formatting issue), and NaN values
-        if qty_val is None or (isinstance(qty_val, float) and str(qty_val).lower() in ("nan", "none")):
-            qty = 0.0
-        elif isinstance(qty_val, str):
-            qty_str = qty_val.strip()
-            if qty_str in ("", "-", "N/A", "n/a", "None", "####", "nan", "NaN"):
-                qty = 0.0
-            else:
-                qty = _coerce_number(qty_val)
-        else:
-            # Handle "####" which is Excel's way of showing a number that's too wide
-            qty_str = str(qty_val).strip()
-            if qty_str == "####":
-                qty = 0.0  # Treat as zero (could try to read actual value, but safer to use 0)
-            else:
-                qty = _coerce_number(qty_val)
-        # Keep ALL rows including zero quantities - do not skip
-        
-        # Normalize month label to ISO date (YYYY-MM-DD)
-        delivery_date = _normalize_date_to_iso(month_col)
-        
-        requirements.append({
-            "customer": final_customer,
-            "material": material,
-            "quantity": qty,
-            "unit": unit,
-            "delivery_date": delivery_date,
-            "urgency": "",
-            "description": description,  # Keep description field for reference
-            "notes": final_notes,  # Put description in notes field (like before)
-            "source": source,
-            "source_file": source_file,
-            "row_index": row_idx,
-        })
-        if debug:
-            print(f"[DEBUG] Row {row_idx}: Extracted requirement from month column - material={material}, quantity={qty}, month={month_col}, delivery_date={delivery_date}")
-    
-    return requirements
-
-
-def _sanitize_rows(rows: List[Dict[str, Any]], customer: str, source: str, source_file: str) -> List[Dict[str, Any]]:
-    cleaned: List[Dict[str, Any]] = []
-    for item in rows or []:
-        qty = _coerce_number(item.get("quantity", 0))
-        # Keep ALL rows including zero quantities - do not drop any
-        # skip rows without material/item number (likely total/summary rows)
-        material = str(item.get("material", "") or item.get("id", "") or "").strip()
-        if not material:
-            continue
-        # Clean material code to extract just the numeric part if it has additional text
-        material = _clean_material_code(material)
-        if not material:
-            continue
-        notes = str(item.get("notes", "") or "")
-        description = str(item.get("description", "") or "")
-        
-        # Combine description with notes (description should appear in notes field)
-        # If both exist, combine them; otherwise use whichever exists
-        final_notes = ""
-        if description and notes:
-            final_notes = f"{description} | {notes}"
-        elif description:
-            final_notes = description
-        elif notes:
-            final_notes = notes
-        
-        # skip dropped SKUs
-        if "dropped" in final_notes.lower():
-            continue
-        out = dict(item)
-        out["quantity"] = qty
-        out["material"] = material  # Use cleaned material code
-        if "id" in out:
-            out["id"] = material
-        # Use customer from row if available, otherwise use email sender (passed customer parameter)
-        # This ensures consistent customer name across all rows from the same email
-        row_customer = str(item.get("customer", "") or "").strip()
-        if row_customer:
-            out["customer"] = row_customer
-        else:
-            out["customer"] = customer or ""
-        # Put description in notes field (like Excel does)
-        out["notes"] = final_notes
-        out["description"] = description  # Keep description field for reference
-        
-        # Normalize delivery_date to ISO format (YYYY-MM-DD) for consistent pivot tables
-        delivery_date = str(item.get("delivery_date", "") or "").strip()
-        if delivery_date:
-            # Normalize any date format to ISO format (YYYY-MM-DD)
-            out["delivery_date"] = _normalize_date_to_iso(delivery_date)
-        
-        out["source"] = source
-        out["source_file"] = source_file
-        cleaned.append(out)
-    return cleaned
-
-
 @click.command()
 @click.option("--input-dir", required=False, default=None, type=click.Path(exists=True, file_okay=False), help="Folder containing .xlsx files")
 @click.option("--out", required=False, default="requirements_output.xlsx", type=click.Path(dir_okay=False), help="Output Excel path")
@@ -704,6 +245,8 @@ def main(input_dir: str, out: str, region: str, dry_run: bool, max_files: int, i
 	if not all_rows:
 		print("No requirements extracted.")
 		return
+
+	all_rows = dedupe_requirements(all_rows)
 
 	df = pd.DataFrame(all_rows)
 	
@@ -791,396 +334,161 @@ def handle_xlsx_file(path: str, bedrock, dry_run: bool) -> List[Dict[str, Any]]:
 	if not records:
 		return []
 
-	if dry_run:
-		text_blob = "\n".join([f"row={idx} " + ", ".join([f"{k}={v}" for k, v in rec.items() if v == v]) for idx, rec in enumerate(records)])
-		return [{
-			"customer": "",
-			"material": "",
-			"quantity": "",
-			"unit": "",
-			"delivery_date": "",
-			"urgency": "",
-			"notes": text_blob[:5000],
-			"source": "xlsx",
-			"source_file": os.path.basename(path),
-			"row_index": None,
-		}]
+	filename = os.path.basename(path)
 
-	# Direct extraction: programmatically process month columns to avoid LLM date mapping errors
-	all_requirements = []
+	if dry_run:
+		return [
+			{
+				"customer": "",
+				"material": "",
+				"quantity": "",
+				"unit": "",
+				"delivery_date": "",
+				"urgency": "",
+				"notes": f"[dry-run] detected {len(records)} row(s) in {filename}",
+				"source": "xlsx",
+				"source_file": filename,
+				"row_index": None,
+			}
+		]
+
+	all_requirements: List[Dict[str, Any]] = []
 	for idx, rec in enumerate(records):
-		requirements = _extract_requirements_from_excel_row(rec, bedrock, "", "", "xlsx", os.path.basename(path), idx, debug=False)
-		all_requirements.extend(requirements)
-	
-	return all_requirements
+		raw = excel_processor.extract_requirements_from_excel_row(
+			rec,
+			bedrock,
+			"",
+			"",
+			"xlsx",
+			filename,
+			idx,
+			debug=False,
+		)
+		all_requirements.extend(
+			sanitize_rows(
+				raw,
+				"",
+				"xlsx",
+				filename,
+			)
+		)
+
+	return dedupe_requirements(all_requirements)
 
 
 # Removed handle_eml - .eml file handling no longer supported
 
 
 def handle_eml_bytes(raw_bytes: bytes, label: str, bedrock, dry_run: bool, debug: bool = False) -> List[Dict[str, Any]]:
-	parsed = parse_eml_bytes(raw_bytes, source_label=f"imap:{label}")
-	
-	# Filter: Only process emails sent to TARGET_EMAIL
-	if not should_process_email(parsed):
-		if debug:
-			print(f"EMAIL IMAP: SKIPPED - not sent to {TARGET_EMAIL}. Recipients: {parsed.recipients}")
-		return []
-	
-	# Extract customer name from email (subject/body) - priority over sender
-	email_customer = _extract_customer_from_email(parsed)
-	if not email_customer:
-		email_customer = parsed.sender  # Fallback to sender if not found
-	
-	rows: List[Dict[str, Any]] = []
-	skip_text_model = False
+    parsed = parse_eml_bytes(raw_bytes, source_label=f"imap:{label}")
 
-	# Parse HTML tables directly to avoid LLM misalignment on structured data
-	if parsed.html_raw:
-		html_tables = extract_tables_from_html(parsed.html_raw)
-		if html_tables and debug:
-			print(f"[DEBUG] Found {len(html_tables)} HTML table(s) in email body")
-		for idx, table in enumerate(html_tables or []):
-			table_source = f"{label}#html-table-{idx + 1}"
-			if debug:
-				print(f"[DEBUG] Processing HTML table {idx + 1}: columns={len(table.get('columns', []))}, rows={len(table.get('rows', []))}")
-			html_rows = expand_grid_to_requirements(table, "email-html", table_source, email_customer, debug=debug)
-			if not html_rows:
-				continue
-			rows.extend(_sanitize_rows(html_rows, email_customer, "email-html", table_source))
-		if rows:
-			skip_text_model = True
-	if debug:
-		print(f"EMAIL IMAP: subject={parsed.subject} from={parsed.sender} recipients={parsed.recipients} images={len(parsed.images)} xlsx={len(parsed.xlsx_attachments)}")
-		if email_customer != parsed.sender:
-			print(f"[DEBUG] Extracted customer from email: {email_customer} (instead of sender: {parsed.sender})")
+    if not should_process_email(parsed):
+        if debug:
+            print(
+                f"EMAIL IMAP: SKIPPED - not sent to {TARGET_EMAIL}. Recipients: {parsed.recipients}"
+            )
+        return []
 
-	meta_header = f"Subject: {parsed.subject}\nFrom: {parsed.sender}\nDate: {parsed.date}\n"
-	full_text = "\n\n".join([meta_header, parsed.plain_text, parsed.html_text]).strip()
+    email_customer = _extract_customer_from_email(parsed)
+    if not email_customer:
+        email_customer = parsed.sender
 
-	if full_text:
-		if dry_run:
-			rows.append({
-				"customer": email_customer,
-				"material": "",
-				"quantity": "",
-				"unit": "",
-				"delivery_date": "",
-				"urgency": "",
-				"notes": full_text[:5000],
-				"source": "email-text",
-				"source_file": f"{label}",
-				"row_index": None,
-			})
-		elif not skip_text_model:
-			text_rows = analyze_text_requirements(
-				bedrock,
-				user_text=full_text,
-				system_text=(
-					"Extract requirements from an email. Capture customer name (if found in the row data), material ID (product ID/code/SKU), quantity, unit, delivery date, description (product/item description if available), and notes. "
-					"CRITICAL: Do NOT extract generic phrases like 'Material Requirements', 'Customer Material Requirements', 'Requirements', 'Material', 'Excel attachment', 'Table', 'Table as image', 'Format', 'Image', 'Attachment', 'Test', 'Welcome', 'Hey' as customer names. "
-					"Only extract actual company/customer names that look like real business names (e.g., 'ABC Pvt Ltd', 'Cipla', 'ENCUBE ETHICALS PVT LTD', 'GSK', 'John Doe Company'). "
-					"A valid customer name should: (1) contain letters, (2) look like a company/person name (not a generic word), (3) may contain company indicators like 'Pvt Ltd', 'Inc', 'Corp', etc. "
-					"If you cannot find a valid customer/company name that looks real, leave the customer field empty (it will be filled from email sender). "
-					"Do NOT extract header rows or rows that are just customer names without material/quantity data."
-				),
-				source="email-text",
-				source_file=f"{label}",
-				debug=debug,
-			)
-			rows.extend(_sanitize_rows(text_rows, email_customer, "email-text", f"{label}"))
+    if debug:
+        print(
+            f"EMAIL IMAP: subject={parsed.subject} from={parsed.sender} "
+            f"recipients={parsed.recipients} images={len(parsed.images)} "
+            f"xlsx={len(parsed.xlsx_attachments)}"
+        )
+        if email_customer != parsed.sender:
+            print(
+                f"[DEBUG] Extracted customer from email: {email_customer} "
+                f"(instead of sender: {parsed.sender})"
+            )
 
-	for (ext, img_bytes) in parsed.images:
-		fmt = ext.lower()
-		if fmt == "jpg":
-			fmt = "jpeg"
-		if dry_run:
-			rows.append({
-				"customer": email_customer,
-				"material": "",
-				"quantity": "",
-				"unit": "",
-				"delivery_date": "",
-				"urgency": "",
-				"notes": f"[image:{fmt}]",
-				"source": "email-image",
-				"source_file": f"{label}",
-				"row_index": None,
-			})
-		else:
-			grid = analyze_image_table_grid(
-				bedrock,
-				image_bytes=img_bytes,
-				image_format=fmt,
-				debug=debug,
-				context_text=f"From: {parsed.sender}\nSubject: {parsed.subject}\nDate: {parsed.date}"
-			)
-			if grid:
-				if debug:
-					print("[DEBUG] Grid extracted successfully, using grid expansion")
-					print(f"[DEBUG] Grid has {len(grid.get('rows', []))} rows")
-				# Only run month correction if Jul-23/Aug-23 columns exist (optimization: skip unnecessary API call)
-				columns = [str(c).lower() for c in grid.get('columns', [])]
-				has_rolling_projection = any('jul-23' in c or 'aug-23' in c for c in columns)
-				if has_rolling_projection:
-					if debug:
-						print("[DEBUG] Running grid month correction (Jul-23/Aug-23 columns detected)...")
-					grid = correct_grid_months(bedrock, grid, debug=debug)
-				elif debug:
-					print("[DEBUG] Skipping month correction (no Jul-23/Aug-23 columns)")
+    if dry_run:
+        placeholders: List[Dict[str, Any]] = []
+        for ext, _ in parsed.images or []:
+            fmt = ext.lower()
+            if fmt == "jpg":
+                fmt = "jpeg"
+            placeholders.append(
+                {
+                    "customer": email_customer,
+                    "material": "",
+                    "quantity": "",
+                    "unit": "",
+                    "delivery_date": "",
+                    "urgency": "",
+                    "notes": f"[image:{fmt}]",
+                    "source": "email-image",
+                    "source_file": str(label),
+                    "row_index": None,
+                }
+            )
+        for filename, _ in parsed.xlsx_attachments or []:
+            placeholders.append(
+                {
+                    "customer": email_customer,
+                    "material": "",
+                    "quantity": "",
+                    "unit": "",
+                    "delivery_date": "",
+                    "urgency": "",
+                    "notes": f"[xlsx:{filename}]",
+                    "source": "email-xlsx",
+                    "source_file": str(label),
+                    "row_index": None,
+                }
+            )
+        return placeholders
 
-				# Run a reconciliation pass against the original image to fix any column misalignment
-				grid = reconcile_grid_with_image(
-					bedrock,
-					image_bytes=img_bytes,
-					image_format=fmt,
-					grid=grid,
-					debug=debug,
-				)
-				# Try to refine the rolling projection columns; keep original values if refinement clears them
-				refined_grid = refine_projection_with_image(
-					bedrock,
-					image_bytes=img_bytes,
-					image_format=fmt,
-					grid=grid,
-					debug=debug,
-				)
-				if refined_grid and isinstance(refined_grid, dict) and refined_grid.get("rows"):
-					try:
-						def _merge_grids(base, candidate):
-							base_rows = base.get("rows", [])
-							candidate_rows = candidate.get("rows", [])
-							if len(base_rows) != len(candidate_rows):
-								return base
-							merged_rows = []
-							for base_row, cand_row in zip(base_rows, candidate_rows):
-								merged = dict(base_row)
-								for key, value in cand_row.items():
-									if key not in merged:
-										continue
-									try:
-										base_val = float(str(merged[key]).replace(',', '').strip() or 0)
-										cand_val = float(str(value).replace(',', '').strip() or 0)
-									except Exception:
-										merged[key] = value
-										continue
-									if cand_val == 0 and base_val != 0:
-										continue
-									if base_val == 0 and cand_val != 0:
-										merged[key] = value
-									elif cand_val != base_val:
-										# Prefer candidate only if base is zero or candidate greatly larger
-										if cand_val > base_val:
-											merged[key] = value
-								merged_rows.append(merged)
-							return {"columns": base.get("columns", []), "rows": merged_rows}
-						grid = _merge_grids(grid, refined_grid)
-					except Exception:
-						grid = grid
+    html_rows = html_processor.extract_html_tables(
+        parsed,
+        email_customer,
+        str(label),
+        debug=debug,
+    )
+    excel_rows = excel_processor.extract_excel_attachments(
+        parsed,
+        bedrock,
+        email_customer,
+        str(label),
+        debug=debug,
+    )
+    image_rows = image_processor.extract_image_requirements(
+        parsed,
+        bedrock,
+        email_customer,
+        str(label),
+        debug=debug,
+    )
 
-				image_rows = expand_grid_to_requirements(grid, "email-image", f"{label}", email_customer, debug=debug)
-				if not image_rows:
-					placeholder_cols = []
-					for col in grid.get("columns", []):
-						col_str = str(col).strip()
-						if re.fullmatch(r"[Mm]\d{1,2}", col_str):
-							placeholder_cols.append(col_str)
-					if placeholder_cols:
-						if debug:
-							print(f"[DEBUG] No month columns detected; resolving placeholders {placeholder_cols} via image prompts")
-						header_mapping = resolve_image_month_headers(
-							bedrock,
-							image_bytes=img_bytes,
-							image_format=fmt,
-							placeholders=placeholder_cols,
-							debug=debug,
-						)
-						if header_mapping:
-							if debug:
-								print(f"[DEBUG] Resolved header mapping: {header_mapping}")
-							new_columns = []
-							for col in grid.get("columns", []):
-								col_str = str(col)
-								new_columns.append(header_mapping.get(col_str, col))
-							new_rows = []
-							for row in grid.get("rows", []):
-								if isinstance(row, dict):
-									updated = {}
-									for key, value in row.items():
-										key_str = str(key)
-										updated_key = header_mapping.get(key_str, key)
-										updated[updated_key] = value
-									new_rows.append(updated)
-								else:
-									new_rows.append(row)
-							grid = {"columns": new_columns, "rows": new_rows}
-							image_rows = expand_grid_to_requirements(grid, "email-image", f"{label}", email_customer, debug=debug)
+    rows: List[Dict[str, Any]] = []
+    rows.extend(html_rows)
+    rows.extend(excel_rows)
+    rows.extend(image_rows)
 
-				# Targeted verification for each SKU/month if zeros remain
-				try:
-					month_columns = []
-					for col_name in grid.get("columns", []):
-						if '-23' in str(col_name) or '-24' in str(col_name):
-							month_columns.append(str(col_name))
-					if month_columns:
-						for idx, row in enumerate(grid.get("rows", [])):
-							sku_val = ""
-							if isinstance(row, dict):
-								sku_val = str(row.get("SKU") or row.get("sku") or "")
-							if not sku_val:
-								continue
-							verification = verify_row_months_with_image(
-								bedrock,
-								image_bytes=img_bytes,
-								image_format=fmt,
-								sku_value=sku_val,
-								month_columns=month_columns,
-								debug=debug,
-							)
-							if not verification:
-								continue
-							for result_row in image_rows:
-								if result_row.get("material") and result_row["material"] in sku_val:
-									month_date = result_row.get("delivery_date")
-									for col in month_columns:
-										if _normalize_date_to_iso(col) == month_date:
-											new_qty = verification.get(col)
-											if new_qty is None:
-												continue
-											result_row["quantity"] = new_qty
-				except Exception:
-					if debug:
-						print("[DEBUG] Month verification step failed; proceeding with existing grid values")
+    if debug:
+        print(
+            f"[DEBUG] Extracted counts -> html: {len(html_rows)}, "
+            f"excel: {len(excel_rows)}, image: {len(image_rows)}"
+        )
 
-				if debug:
-					print(f"[DEBUG] Grid expansion returned {len(image_rows)} rows")
+    if not rows:
+        text_rows = text_processor.extract_text_requirements(
+            parsed,
+            bedrock,
+            email_customer,
+            str(label),
+            debug=debug,
+        )
+        rows.extend(text_rows)
+    elif debug:
+        print(
+            "[DEBUG] Structured data detected; skipping text model extraction to avoid duplicates"
+        )
 
-				# Remove rows already captured from text/HTML/Excel for this email
-				existing_pairs = {
-					(r.get("material"), r.get("delivery_date"))
-					for r in rows
-					if r.get("material") and r.get("delivery_date")
-				}
-				image_rows = _dedupe_with_existing(image_rows, existing_pairs)
-
-				# Build acceptable date ranges per material (with slight buffer) for supplemental rows
-				allowed_ranges: Dict[str, Tuple[datetime, datetime]] = {}
-				for row in image_rows:
-					material = row.get("material")
-					deliv = row.get("delivery_date")
-					if not material or not deliv:
-						continue
-					try:
-						dt = datetime.fromisoformat(deliv)
-					except Exception:
-						continue
-					if material in allowed_ranges:
-						cur_min, cur_max = allowed_ranges[material]
-						allowed_ranges[material] = (min(cur_min, dt), max(cur_max, dt))
-					else:
-						allowed_ranges[material] = (dt, dt)
-				for material, (min_dt, max_dt) in list(allowed_ranges.items()):
-					allowed_ranges[material] = (min_dt - timedelta(days=40), max_dt + timedelta(days=40))
-
-				# If the image-derived schedule skips months, supplement with raw extraction
-				if _has_delivery_gaps(image_rows):
-					if debug:
-						print("[DEBUG] Detected delivery date gaps in image grid; supplementing with raw image extraction")
-					raw_rows = analyze_image_requirements(
-						bedrock,
-						image_bytes=img_bytes,
-						image_format=fmt,
-						source="email-image",
-						source_file=f"{label}",
-						debug=debug,
-						context_text=f"From: {parsed.sender}\nSubject: {parsed.subject}\nDate: {parsed.date}",
-					)
-					raw_rows = _dedupe_with_existing(raw_rows, existing_pairs, allowed_ranges)
-					if raw_rows and debug:
-						print(f"[DEBUG] Added {len(raw_rows)} supplemental rows from raw image extraction")
-					image_rows.extend(raw_rows)
-			else:
-				if debug:
-					print("[DEBUG] Grid extraction failed, falling back to raw image extraction")
-				image_rows = analyze_image_requirements(
-					bedrock,
-					image_bytes=img_bytes,
-					image_format=fmt,
-					source="email-image",
-					source_file=f"{label}",
-					debug=debug,
-					context_text=f"From: {parsed.sender}\nSubject: {parsed.subject}\nDate: {parsed.date}"
-				)
-				if debug:
-					print(f"[DEBUG] Raw image extraction returned {len(image_rows)} rows")
-			rows.extend(_sanitize_rows(image_rows, email_customer, "email-image", f"{label}"))
-
-	for (filename, xbytes) in parsed.xlsx_attachments:
-		try:
-			records = read_xlsx_bytes(xbytes)
-		except Exception:
-			records = []
-		if not records:
-			continue
-		if dry_run:
-			text_blob = "\n".join([f"row={idx} " + ", ".join([f"{k}={v}" for k, v in rec.items() if v == v]) for idx, rec in enumerate(records)])
-			rows.append({
-				"customer": email_customer,
-				"material": "",
-				"quantity": "",
-				"unit": "",
-				"delivery_date": "",
-				"urgency": "",
-				"notes": text_blob[:5000],
-				"source": "email-xlsx",
-				"source_file": filename or f"{label}",
-				"row_index": None,
-			})
-		else:
-			# Direct extraction: programmatically process month columns
-			# Track customer name across rows (for Excel files where customer name is in a different row)
-			last_customer = email_customer or parsed.sender or ""
-			if debug:
-				print(f"[DEBUG] Processing {len(records)} Excel rows from {filename or f'{label}'}")
-				if records:
-					# Show first record's column names to debug header detection
-					first_rec = records[0]
-					import re as _re
-					month_pattern = _re.compile(r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-zA-Z\-']*\s?\d{2,4}$", _re.IGNORECASE)
-					all_cols = list(first_rec.keys())
-					month_cols = [c for c in all_cols if month_pattern.match(str(c).strip())]
-					print(f"[DEBUG] First record columns: {all_cols[:10]}... (total: {len(all_cols)})")
-					print(f"[DEBUG] Month columns found: {month_cols[:10]}... (total: {len(month_cols)})")
-			for idx, rec in enumerate(records):
-				# Check if this row has a customer name (but might not have material code)
-				customer_candidates = ["Customer", "Customer Name", "Company"]
-				row_customer = ""
-				for col_name in customer_candidates:
-					for k, v in rec.items():
-						if col_name.lower() in str(k).lower():
-							row_customer = str(v).strip() if v == v else ""
-							if row_customer:
-								last_customer = row_customer  # Update last seen customer
-								break
-					if row_customer:
-						break
-				# Use last_customer if row doesn't have customer name
-				current_customer = row_customer or last_customer or email_customer or parsed.sender or ""
-				requirements = _extract_requirements_from_excel_row(rec, bedrock, parsed.sender, current_customer, "email-xlsx", filename or f"{label}", idx, debug=debug)
-				if debug and requirements:
-					print(f"[DEBUG] Row {idx}: extracted {len(requirements)} requirement(s)")
-				rows.extend(requirements)
-			if debug:
-				excel_rows = [r for r in rows if r.get('source') == 'email-xlsx']
-				print(f"[DEBUG] Total Excel requirements extracted from {filename or f'{label}'}: {len(excel_rows)}")
-				if excel_rows:
-					print(f"[DEBUG] Final captured requirements from Excel:")
-					for idx, req in enumerate(excel_rows[:10]):  # Print first 10
-						print(f"  [{idx}] material={req.get('material')}, quantity={req.get('quantity')}, unit={req.get('unit')}, delivery_date={req.get('delivery_date')}, customer={req.get('customer')}")
-					if len(excel_rows) > 10:
-						print(f"  ... and {len(excel_rows) - 10} more")
-
-	return rows
+    return dedupe_requirements(rows)
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ from email.mime.multipart import MIMEMultipart
 # Import processing functions directly
 from bedrock_client import get_bedrock_client
 from ingest.imap_fetcher import fetch_emails
-from main import handle_eml_bytes, should_process_email, _sanitize_rows, TARGET_EMAIL
+from main import handle_eml_bytes, should_process_email, TARGET_EMAIL
 
 app = Flask(__name__)
 
@@ -45,20 +45,24 @@ def process_emails_async():
     global PROCESSING_STATUS
     global LAST_PROCESSED_DATA
     try:
+        LAST_PROCESSED_DATA = {"columns": [], "rows": []}
         PROCESSING_STATUS["status"] = "processing"
         PROCESSING_STATUS["message"] = "Starting email processing..."
         PROCESSING_STATUS["last_updated"] = datetime.now().isoformat()
-        
+
         # Capture stdout/stderr to avoid interfering with Flask
         stdout_capture = StringIO()
         stderr_capture = StringIO()
-        
+
         with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
             bedrock = get_bedrock_client("us-east-1")
             all_rows = []
-            
+
             # Fetch emails
-            print(f"IMAP: connecting to {IMAP_CONFIG['host']} mailbox={IMAP_CONFIG['mailbox']} criteria=\"{IMAP_CONFIG['criteria']}\" limit={IMAP_CONFIG['limit']}")
+            print(
+                f"IMAP: connecting to {IMAP_CONFIG['host']} mailbox={IMAP_CONFIG['mailbox']} "
+                f"criteria=\"{IMAP_CONFIG['criteria']}\" limit={IMAP_CONFIG['limit']}"
+            )
             emails = fetch_emails(
                 host=IMAP_CONFIG["host"],
                 username=IMAP_CONFIG["user"],
@@ -68,11 +72,11 @@ def process_emails_async():
                 limit=IMAP_CONFIG["limit"],
             )
             print(f"IMAP: fetched {len(emails)} message(s)")
-            
+
             for raw_bytes, uid in emails:
                 rows = handle_eml_bytes(raw_bytes, uid, bedrock, dry_run=False, debug=False)
                 all_rows.extend(rows)
-            
+
             if not all_rows:
                 PROCESSING_STATUS["status"] = "completed"
                 PROCESSING_STATUS["message"] = "No requirements extracted from emails."
@@ -80,47 +84,47 @@ def process_emails_async():
                 PROCESSING_STATUS["last_updated"] = datetime.now().isoformat()
                 LAST_PROCESSED_DATA = {"columns": [], "rows": []}
                 return
-            
-            # Create DataFrame and save
-            import pandas as pd
+
             df = pd.DataFrame(all_rows)
-            
-            # Map fields to match requirements
+
             if "customer" in df.columns:
                 df["customer_name"] = df["customer"]
             if "material" in df.columns:
                 df["id"] = df["material"]
             if "delivery_date" in df.columns:
                 df["date"] = df["delivery_date"]
-            
+
             df_columns = ["customer_name", "id", "quantity", "date"]
             additional_cols = ["unit", "urgency", "notes", "source", "source_file", "row_index"]
             for col in additional_cols:
                 if col in df.columns:
                     df_columns.append(col)
-            
+
             for col in df_columns:
                 if col not in df.columns:
                     df[col] = ""
             df = df[df_columns]
-            
+
             records = df.fillna("").to_dict(orient="records")
             LAST_PROCESSED_DATA = {
                 "columns": df_columns,
                 "rows": records,
             }
             df.to_excel(OUTPUT_FILE, index=False)
-            
+
             row_count = len(df)
             PROCESSING_STATUS["status"] = "completed"
-            PROCESSING_STATUS["message"] = f"Processing completed successfully. Extracted {row_count} requirement rows."
+            PROCESSING_STATUS["message"] = (
+                f"Processing completed successfully. Extracted {row_count} requirement rows."
+            )
             PROCESSING_STATUS["rows_count"] = row_count
-            
-    except Exception as e:
+
+    except Exception as exc:  # noqa: BLE001
         import traceback
+
         PROCESSING_STATUS["status"] = "error"
-        PROCESSING_STATUS["message"] = f"Error during processing: {str(e)}\n{traceback.format_exc()}"
-    
+        PROCESSING_STATUS["message"] = f"Error during processing: {exc}\n{traceback.format_exc()}"
+
     PROCESSING_STATUS["last_updated"] = datetime.now().isoformat()
 
 @app.route('/')
@@ -158,23 +162,6 @@ def get_data():
             "data": LAST_PROCESSED_DATA["rows"],
             "row_count": len(LAST_PROCESSED_DATA["rows"])
         })
-    
-    # Fallback to existing Excel file only if we have never processed during this server session
-    if PROCESSING_STATUS.get("last_updated") is None:
-        if not os.path.exists(OUTPUT_FILE):
-            return jsonify({"error": "No data file found"}), 404
-        
-        try:
-            df = pd.read_excel(OUTPUT_FILE)
-            data = df.fillna("").to_dict(orient='records')
-            return jsonify({
-                "columns": list(df.columns),
-                "data": data,
-                "row_count": len(df)
-            })
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
-    
     return jsonify({
         "columns": [],
         "data": [],
