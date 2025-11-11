@@ -37,16 +37,38 @@ SMTP_CONFIG = {
 }
 
 OUTPUT_FILE = "requirements_output.xlsx"
-PROCESSING_STATUS = {"status": "idle", "message": "", "rows_count": 0, "last_updated": None}
+PROCESSING_STATUS = {
+    "status": "idle",
+    "message": "",
+    "rows_count": 0,
+    "last_updated": None,
+    "columns": [],
+    "data": [],
+}
+
+
+def _clear_output_file():
+    """Remove the output Excel file if it exists."""
+    if os.path.exists(OUTPUT_FILE):
+        try:
+            os.remove(OUTPUT_FILE)
+        except OSError:
+            pass
 
 def process_emails_async():
     """Run email processing in background thread"""
     global PROCESSING_STATUS
     try:
-        PROCESSING_STATUS["status"] = "processing"
-        PROCESSING_STATUS["message"] = "Starting email processing..."
-        PROCESSING_STATUS["last_updated"] = datetime.now().isoformat()
-        PROCESSING_STATUS["rows_count"] = 0
+        PROCESSING_STATUS.update({
+            "status": "processing",
+            "message": "Starting email processing...",
+            "last_updated": datetime.now().isoformat(),
+            "rows_count": 0,
+            "columns": [],
+            "data": [],
+        })
+
+        _clear_output_file()
 
         # Capture stdout/stderr to avoid interfering with Flask
         stdout_capture = StringIO()
@@ -80,11 +102,9 @@ def process_emails_async():
                 PROCESSING_STATUS["message"] = "No requirements extracted from emails."
                 PROCESSING_STATUS["rows_count"] = 0
                 PROCESSING_STATUS["last_updated"] = datetime.now().isoformat()
-                if os.path.exists(OUTPUT_FILE):
-                    try:
-                        os.remove(OUTPUT_FILE)
-                    except OSError:
-                        pass
+                PROCESSING_STATUS["columns"] = []
+                PROCESSING_STATUS["data"] = []
+                _clear_output_file()
                 return
 
             df = pd.DataFrame(all_rows)
@@ -108,25 +128,27 @@ def process_emails_async():
             df = df[df_columns]
 
             df = df.fillna("")
-            if os.path.exists(OUTPUT_FILE):
-                try:
-                    os.remove(OUTPUT_FILE)
-                except OSError:
-                    pass
+            _clear_output_file()
             df.to_excel(OUTPUT_FILE, index=False)
 
-            row_count = len(df)
+            rows = df.to_dict(orient="records")
+            row_count = len(rows)
             PROCESSING_STATUS["status"] = "completed"
             PROCESSING_STATUS["message"] = (
                 f"Processing completed successfully. Extracted {row_count} requirement rows."
             )
             PROCESSING_STATUS["rows_count"] = row_count
+            PROCESSING_STATUS["columns"] = df.columns.tolist()
+            PROCESSING_STATUS["data"] = rows
 
     except Exception as exc:  # noqa: BLE001
         import traceback
 
         PROCESSING_STATUS["status"] = "error"
         PROCESSING_STATUS["message"] = f"Error during processing: {exc}\n{traceback.format_exc()}"
+        PROCESSING_STATUS["rows_count"] = 0
+        PROCESSING_STATUS["columns"] = []
+        PROCESSING_STATUS["data"] = []
 
     PROCESSING_STATUS["last_updated"] = datetime.now().isoformat()
 
@@ -143,6 +165,16 @@ def trigger_process():
     if PROCESSING_STATUS["status"] == "processing":
         return jsonify({"error": "Processing already in progress"}), 400
     
+    PROCESSING_STATUS.update({
+        "status": "processing",
+        "message": "Starting email processing...",
+        "last_updated": datetime.now().isoformat(),
+        "rows_count": 0,
+        "columns": [],
+        "data": [],
+    })
+    _clear_output_file()
+    
     # Start processing in background thread
     thread = threading.Thread(target=process_emails_async)
     thread.daemon = True
@@ -158,21 +190,10 @@ def get_status():
 @app.route('/api/data')
 def get_data():
     """Get processed data as JSON"""
-    if not os.path.exists(OUTPUT_FILE):
-        return jsonify({"columns": [], "data": [], "row_count": 0})
-    try:
-        df = pd.read_excel(OUTPUT_FILE).fillna("")
-    except Exception as exc:  # noqa: BLE001
-        return jsonify({
-            "columns": [],
-            "data": [],
-            "row_count": 0,
-            "error": f"Failed to read output file: {exc}",
-        }), 500
-
-    columns = df.columns.tolist()
-    rows = df.to_dict(orient="records")
-    return jsonify({"columns": columns, "data": rows, "row_count": len(rows)})
+    columns = PROCESSING_STATUS.get("columns", [])
+    rows = PROCESSING_STATUS.get("data", [])
+    row_count = PROCESSING_STATUS.get("rows_count", len(rows))
+    return jsonify({"columns": columns, "data": rows, "row_count": row_count})
 
 @app.route('/api/download')
 def download_file():
