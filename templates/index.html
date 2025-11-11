@@ -192,6 +192,20 @@
             vertical-align: middle;
         }
         
+        .loading-state {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 40px;
+            color: #555;
+            font-weight: 500;
+        }
+        
+        .loading-state .spinner {
+            margin-right: 0;
+        }
+        
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
@@ -234,6 +248,7 @@
         function triggerProcess() {
             const btn = document.getElementById('processBtn');
             btn.disabled = true;
+            showLoadingState();
             
             fetch('/email-demo/api/process', {
                 method: 'POST',
@@ -297,6 +312,15 @@
             }
             
             messageEl.textContent = message || '';
+        }
+        
+        function showLoadingState() {
+            document.getElementById('tableContainer').innerHTML = `
+                <div class="loading-state">
+                    <span class="spinner"></span>
+                    Processing latest requirements...
+                </div>`;
+            document.getElementById('downloadBtn').style.display = 'none';
         }
         
         function loadData() {
