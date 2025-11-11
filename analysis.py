@@ -23,6 +23,94 @@ REQUIREMENTS_SCHEMA = {
 }
 
 
+_MONTH_PATTERN = re.compile(
+	r"^(\d{1,2}[-./])?(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|Jun(e)?|Jul(y)?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)[a-zA-Z\-']*\s?\d{2,4}$",
+	re.IGNORECASE,
+)
+_MONTH_PATTERN_LOOSE = re.compile(
+	r"(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|Jun(e)?|Jul(y)?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)\s*[\'\-/.,]?\s*\d{2,4}",
+	re.IGNORECASE,
+)
+_MONTH_SUFFIX_KEYWORDS = {
+	"qty",
+	"quantity",
+	"quantities",
+	"forecast",
+	"fcst",
+	"volume",
+	"vol",
+	"units",
+	"unit",
+	"demand",
+	"plan",
+	"planning",
+	"projection",
+	"proj",
+	"rolling",
+	"commit",
+	"committed",
+	"target",
+	"budget",
+	"need",
+	"needs",
+	"requirement",
+	"requirements",
+	"req",
+	"reqs",
+	"sales",
+	"shipments",
+	"shipment",
+	"supply",
+	"delivery",
+	"dispatch",
+	"inventory",
+	"stock",
+	"balance",
+	"consumption",
+	"usage",
+	"backlog",
+}
+
+
+def _strip_month_keywords(text: str) -> str:
+	if not text:
+		return ""
+	tokens = re.split(r"\s+", str(text).strip())
+	while tokens:
+		last = tokens[-1].strip("()[]{}.,:")
+		if last.lower() in _MONTH_SUFFIX_KEYWORDS:
+			tokens.pop()
+			continue
+		break
+	while tokens:
+		first = tokens[0].strip("()[]{}.,:")
+		if first.lower() in _MONTH_SUFFIX_KEYWORDS:
+			tokens = tokens[1:]
+			continue
+		break
+	stripped = " ".join(tokens).strip()
+	return stripped if stripped else str(text).strip()
+
+
+def _normalize_month_header(text: str) -> str:
+	cleaned = _strip_month_keywords(text)
+	return cleaned.rstrip(":").strip()
+
+
+def _is_month_header(text: str) -> bool:
+	if not text:
+		return False
+	cleaned = str(text).strip()
+	if _MONTH_PATTERN.match(cleaned):
+		return True
+	normalized = _normalize_month_header(cleaned)
+	if normalized != cleaned and _MONTH_PATTERN.match(normalized):
+		return True
+	if _MONTH_PATTERN_LOOSE.search(cleaned):
+		return True
+	return False
+
+
 def _strip_code_fences(text: str) -> str:
 	# Try to find code fences anywhere in the text (not just at start)
 	# First try to find complete code fences
@@ -326,7 +414,9 @@ def analyze_image_table_grid(
     """
     prompt = (
         "Extract the COMPLETE visible table into a normalized JSON grid. "
-        "Return ONLY one JSON object with keys: columns (array of strings), rows (array of objects). "
+		"Return ONLY one JSON object with keys: columns (array of strings), rows (array of objects). "
+		"IMPORTANT: The ENTIRE reply must be raw JSON (no Markdown, no explanations, no bullet lists, no headings). "
+		"Do not wrap the JSON in ``` ``` fences, do not prepend text like 'Columns:' or 'Rows:'. "
         "\n"
         "THINK LIKE A HUMAN - UNDERSTAND THE TABLE:\n"
         "1. Look at the table structure - understand what each column represents by its header and data patterns.\n"
@@ -369,6 +459,8 @@ def analyze_image_table_grid(
         "\n"
         "DATA PRESERVATION:\n"
         "- Keep all column headers exactly as they appear in the image.\n"
+        "- CRITICAL: For month/date columns, output the ENTIRE header text exactly as printed (e.g., \"May'23 Qty\" or \"June 2024 Forecast\"). "
+        "Do NOT rename them to generic labels like 'M1', 'Month1', 'Col1', or drop words like 'Qty'/'Forecast'.\n"
         "- Preserve all data values exactly as they appear - do not modify or infer values.\n"
         "- CRITICAL: If a cell is empty, blank, or missing, extract it as null, empty string \"\", or 0 - do NOT infer a value, do NOT use a value from another cell.\n"
         "- CRITICAL: Do NOT shift values between columns - if a cell is empty, it means that cell is empty, NOT the value from another column.\n"
@@ -676,10 +768,11 @@ def reconcile_grid_with_image(
 	prompt = (
 		"You are given an image of a production plan table and the JSON grid that was parsed from it. "
 		"Re-read the table from the image (do not rely on the JSON blindly). "
-		"For each SKU row, verify every numeric value under each month column (Mar-23, Apr-23, May-23, Jun-23, Jul-23, Aug-23) "
-		"and Rolling Projection column. If any value in the JSON is under the wrong month or missing entirely, correct it so the JSON "
-		"matches the exact numbers you see in the image. "
-		"When a cell is blank in the image, set the value to 0 in the JSON. "
+		"For each SKU row, verify that every key field in the grid matches the image: Delivery Date (or month column headers), Receipt Quantity, units, and any other numeric values. "
+		"If the table uses explicit month columns (e.g., Mar-23, Apr-23, etc.), confirm each value sits under the correct month header. "
+		"If the table uses a single 'Delivery Date' column, confirm the exact date text for every row matches the image. "
+		"If any value is under the wrong column, missing, or mis-typed, correct it so the JSON matches the image exactly. "
+		"When a cell is blank in the image, set the value to 0 or empty string in the JSON (do NOT copy values from other cells). "
 		"Return ONLY the corrected grid JSON with the same keys 'columns' and 'rows'. Preserve the number of rows."
 	)
 	grid_text = _json_dumps(grid)
@@ -695,6 +788,79 @@ def reconcile_grid_with_image(
 	if not isinstance(obj, dict) or "columns" not in obj or "rows" not in obj:
 		return grid
 	return obj
+
+
+def resolve_image_month_headers(
+	bedrock,
+	image_bytes: bytes,
+	image_format: str,
+	placeholders: List[str],
+	debug: bool = False,
+) -> Dict[str, str]:
+	if not placeholders:
+		return {}
+	placeholder_list = ", ".join(placeholders)
+	prompt = (
+		f"You are looking at a supply plan table image. The automatic parser labeled the month/date quantity columns with placeholder names: {placeholder_list}. "
+		"Read the actual column header text printed in the image for EACH placeholder. "
+		"Return a JSON object mapping each placeholder to the exact header string as shown in the image (include month names and words like Qty, Forecast, Volume, etc.). "
+		"Example format: {\"M1\": \"May'23 Qty\", \"M2\": \"June'23 Qty\"}. Do NOT invent months; copy the header text exactly."
+	)
+	raw = converse_image(bedrock, image_bytes, image_format, prompt, max_tokens=2048)
+	if debug:
+		print("[DEBUG] Month header resolution raw output:")
+		print(raw[:4000])
+	data = _json_guard(raw)
+	obj = None
+	if data:
+		obj = data[0] if isinstance(data, list) else data
+	else:
+		text = raw
+		start = text.find('{')
+		end = -1
+		if start != -1:
+			brace_count = 1
+			in_string = False
+			escape_next = False
+			for i in range(start + 1, len(text)):
+				ch = text[i]
+				if escape_next:
+					escape_next = False
+					continue
+				if ch == '\\':
+					escape_next = True
+					continue
+				if ch == '"' and not escape_next:
+					in_string = not in_string
+					continue
+				if not in_string:
+					if ch == '{':
+						brace_count += 1
+					elif ch == '}':
+						brace_count -= 1
+						if brace_count == 0:
+							end = i + 1
+							break
+			if end > start:
+				json_str = text[start:end]
+				try:
+					obj = json.loads(json_str)
+				except Exception:
+					obj = None
+	if not isinstance(obj, dict):
+		return {}
+	result: Dict[str, str] = {}
+	for key, value in obj.items():
+		key_str = str(key).strip()
+		if key_str not in placeholders:
+			continue
+		if isinstance(value, str):
+			val_str = value.strip()
+		else:
+			val_str = str(value).strip()
+		if val_str:
+			result[key_str] = val_str
+	return result
 
 
 def expand_grid_to_requirements(
@@ -774,22 +940,15 @@ def expand_grid_to_requirements(
     
     import re as _re
     for i, c in enumerate(columns):
-        c_lower = c.lower().strip()
-        # Check for month columns (e.g., "Mar-23", "Apr-23", "May'23", "June'23", "July'23", "Sept'23", "1-May-23", "23-Mar")
-        # Handle both abbreviated (Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec)
-        # and full month names (January, February, March, April, May, June, July, August, September, October, November, December)
-        # Also handle variations like "Sept" for September
-        # Also handle formats like "1-May-23", "1-.1", "23-Mar", "23-Apr" (date columns that might be month indicators)
-        month_pattern = r"^(\d+[-.])?(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|Jun(e)?|Jul(y)?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)[a-zA-Z\-']*\s?\d{2,4}$"
-        if _re.match(month_pattern, c, _re.IGNORECASE):
+        c_stripped = str(c).strip()
+        c_lower = c_stripped.lower()
+        if _is_month_header(c_stripped):
             month_indices.append(i)
-        # Check for "Delivery Date" column
-        elif "delivery date" in c_lower:
+            continue
+        if "delivery date" in c_lower:
             delivery_date_idx = i
-        # Check for "Receipt Quantity" column
         elif "receipt quantity" in c_lower:
             receipt_quantity_idx = i
-        # Check for "Unit of Measure" column
         elif "unit of measure" in c_lower or "unit" in c_lower and "measure" in c_lower:
             unit_of_measure_idx = i
 
@@ -985,7 +1144,7 @@ def expand_grid_to_requirements(
                     qty = 0.0  # If parsing fails, default to 0
             
             # Keep ALL rows including zero quantities - do not skip
-            month_label = columns[mi]
+            month_label = _normalize_month_header(columns[mi])
             if debug:
                 print(f"[DEBUG] Adding: SKU={material}, {month_label}={qty} (raw={qty_raw})")
             out.append({

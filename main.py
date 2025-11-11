@@ -3,7 +3,8 @@ import io
 import json
 import mimetypes
 import re
-from typing import List, Dict, Any
+from datetime import datetime, timedelta
+from typing import List, Dict, Any, Tuple
 
 import click
 import pandas as pd
@@ -20,6 +21,7 @@ from analysis import (
 	reconcile_grid_with_image,
 	refine_projection_with_image,
 	verify_row_months_with_image,
+	resolve_image_month_headers,
 	_normalize_date_to_iso,
 )
 from ingest.imap_fetcher import fetch_emails
@@ -72,6 +74,58 @@ def _clean_material_code(material: str) -> str:
         return match.group(1)
     # Otherwise return as-is
     return material
+
+
+def _dedupe_with_existing(
+    rows_to_add: List[Dict[str, Any]],
+    existing_keys: set,
+    allowed_ranges: Dict[str, Tuple[datetime, datetime]] = None,
+) -> List[Dict[str, Any]]:
+    """Filter out rows whose (material, delivery_date) already exist."""
+    filtered: List[Dict[str, Any]] = []
+    for row in rows_to_add:
+        material = row.get("material") or ""
+        delivery = row.get("delivery_date") or ""
+        if allowed_ranges and material in allowed_ranges and delivery:
+            try:
+                dt = datetime.fromisoformat(delivery)
+            except Exception:
+                dt = None
+            if dt:
+                lower, upper = allowed_ranges[material]
+                if dt < lower or dt > upper:
+                    continue
+        key = (material, delivery)
+        if material and delivery:
+            if key in existing_keys:
+                continue
+            existing_keys.add(key)
+        filtered.append(row)
+    return filtered
+
+
+def _has_delivery_gaps(rows: List[Dict[str, Any]]) -> bool:
+    """Detect month gaps for each material within the provided rows."""
+    by_material: Dict[str, List[datetime]] = {}
+    for row in rows:
+        material = row.get("material")
+        delivery = row.get("delivery_date")
+        if not material or not delivery:
+            continue
+        try:
+            dt = datetime.fromisoformat(delivery)
+        except Exception:
+            continue
+        by_material.setdefault(material, []).append(dt)
+    for dates in by_material.values():
+        if len(dates) < 2:
+            continue
+        dates.sort()
+        for prev, curr in zip(dates, dates[1:]):
+            month_diff = (curr.year - prev.year) * 12 + (curr.month - prev.month)
+            if month_diff > 1:
+                return True
+    return False
 
 
 def _extract_customer_from_email(parsed) -> str:
@@ -925,6 +979,42 @@ def handle_eml_bytes(raw_bytes: bytes, label: str, bedrock, dry_run: bool, debug
 						grid = grid
 
 				image_rows = expand_grid_to_requirements(grid, "email-image", f"{label}", email_customer, debug=debug)
+				if not image_rows:
+					placeholder_cols = []
+					for col in grid.get("columns", []):
+						col_str = str(col).strip()
+						if re.fullmatch(r"[Mm]\d{1,2}", col_str):
+							placeholder_cols.append(col_str)
+					if placeholder_cols:
+						if debug:
+							print(f"[DEBUG] No month columns detected; resolving placeholders {placeholder_cols} via image prompts")
+						header_mapping = resolve_image_month_headers(
+							bedrock,
+							image_bytes=img_bytes,
+							image_format=fmt,
+							placeholders=placeholder_cols,
+							debug=debug,
+						)
+						if header_mapping:
+							if debug:
+								print(f"[DEBUG] Resolved header mapping: {header_mapping}")
+							new_columns = []
+							for col in grid.get("columns", []):
+								col_str = str(col)
+								new_columns.append(header_mapping.get(col_str, col))
+							new_rows = []
+							for row in grid.get("rows", []):
+								if isinstance(row, dict):
+									updated = {}
+									for key, value in row.items():
+										key_str = str(key)
+										updated_key = header_mapping.get(key_str, key)
+										updated[updated_key] = value
+									new_rows.append(updated)
+								else:
+									new_rows.append(row)
+							grid = {"columns": new_columns, "rows": new_rows}
+							image_rows = expand_grid_to_requirements(grid, "email-image", f"{label}", email_customer, debug=debug)
 
 				# Targeted verification for each SKU/month if zeros remain
 				try:
@@ -964,6 +1054,51 @@ def handle_eml_bytes(raw_bytes: bytes, label: str, bedrock, dry_run: bool, debug
 
 				if debug:
 					print(f"[DEBUG] Grid expansion returned {len(image_rows)} rows")
+
+				# Remove rows already captured from text/HTML/Excel for this email
+				existing_pairs = {
+					(r.get("material"), r.get("delivery_date"))
+					for r in rows
+					if r.get("material") and r.get("delivery_date")
+				}
+				image_rows = _dedupe_with_existing(image_rows, existing_pairs)
+
+				# Build acceptable date ranges per material (with slight buffer) for supplemental rows
+				allowed_ranges: Dict[str, Tuple[datetime, datetime]] = {}
+				for row in image_rows:
+					material = row.get("material")
+					deliv = row.get("delivery_date")
+					if not material or not deliv:
+						continue
+					try:
+						dt = datetime.fromisoformat(deliv)
+					except Exception:
+						continue
+					if material in allowed_ranges:
+						cur_min, cur_max = allowed_ranges[material]
+						allowed_ranges[material] = (min(cur_min, dt), max(cur_max, dt))
+					else:
+						allowed_ranges[material] = (dt, dt)
+				for material, (min_dt, max_dt) in list(allowed_ranges.items()):
+					allowed_ranges[material] = (min_dt - timedelta(days=40), max_dt + timedelta(days=40))
+
+				# If the image-derived schedule skips months, supplement with raw extraction
+				if _has_delivery_gaps(image_rows):
+					if debug:
+						print("[DEBUG] Detected delivery date gaps in image grid; supplementing with raw image extraction")
+					raw_rows = analyze_image_requirements(
+						bedrock,
+						image_bytes=img_bytes,
+						image_format=fmt,
+						source="email-image",
+						source_file=f"{label}",
+						debug=debug,
+						context_text=f"From: {parsed.sender}\nSubject: {parsed.subject}\nDate: {parsed.date}",
+					)
+					raw_rows = _dedupe_with_existing(raw_rows, existing_pairs, allowed_ranges)
+					if raw_rows and debug:
+						print(f"[DEBUG] Added {len(raw_rows)} supplemental rows from raw image extraction")
+					image_rows.extend(raw_rows)
 			else:
 				if debug:
 					print("[DEBUG] Grid extraction failed, falling back to raw image extraction")

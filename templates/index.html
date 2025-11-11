@@ -235,7 +235,7 @@
             const btn = document.getElementById('processBtn');
             btn.disabled = true;
             
-            fetch('/email-demo/api/process', {
+            fetch('/api/process', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -263,7 +263,7 @@
             }
             
             statusCheckInterval = setInterval(() => {
-                fetch('/email-demo/api/status')
+                fetch('/api/status')
                     .then(response => response.json())
                     .then(data => {
                         updateStatus(data.status, data.message);
@@ -300,7 +300,7 @@
         }
         
         function loadData() {
-            fetch('/email-demo/api/data')
+            fetch('/api/data')
                 .then(response => {
                     if (response.status === 404) {
                         document.getElementById('tableContainer').innerHTML = 
@@ -360,12 +360,12 @@
         }
         
         function downloadFile() {
-            window.location.href = '/email-demo/api/download';
+            window.location.href = '/api/download';
         }
         
         // Load data on page load if available
         window.addEventListener('load', () => {
-            fetch('/email-demo/api/status')
+            fetch('/api/status')
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'completed' && data.rows_count > 0) {

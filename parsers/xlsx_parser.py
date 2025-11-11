@@ -1,6 +1,95 @@
 from typing import Dict, List, Any
 from io import BytesIO
+import re
 import pandas as pd
+
+
+_MONTH_PATTERN = re.compile(
+	r"^(\d{1,2}[-./])?(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|Jun(e)?|Jul(y)?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)[a-zA-Z\-']*\s?\d{2,4}$",
+	re.IGNORECASE,
+)
+_MONTH_PATTERN_LOOSE = re.compile(
+	r"(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|Jun(e)?|Jul(y)?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)\s*[\'\-/.,]?\s*\d{2,4}",
+	re.IGNORECASE,
+)
+_MONTH_SUFFIX_KEYWORDS = {
+	"qty",
+	"quantity",
+	"quantities",
+	"forecast",
+	"fcst",
+	"volume",
+	"vol",
+	"units",
+	"unit",
+	"demand",
+	"plan",
+	"planning",
+	"projection",
+	"proj",
+	"rolling",
+	"commit",
+	"committed",
+	"target",
+	"budget",
+	"need",
+	"needs",
+	"requirement",
+	"requirements",
+	"req",
+	"reqs",
+	"sales",
+	"shipments",
+	"shipment",
+	"supply",
+	"delivery",
+	"dispatch",
+	"inventory",
+	"stock",
+	"balance",
+	"consumption",
+	"usage",
+	"backlog",
+}
+
+
+def _strip_month_keywords(text: str) -> str:
+	if not text:
+		return ""
+	tokens = re.split(r"\s+", str(text).strip())
+	while tokens:
+		last = tokens[-1].strip("()[]{}.,:")
+		if last.lower() in _MONTH_SUFFIX_KEYWORDS:
+			tokens.pop()
+			continue
+		break
+	while tokens:
+		first = tokens[0].strip("()[]{}.,:")
+		if first.lower() in _MONTH_SUFFIX_KEYWORDS:
+			tokens = tokens[1:]
+			continue
+		break
+	stripped = " ".join(tokens).strip()
+	return stripped if stripped else str(text).strip()
+
+
+def _normalize_month_header(text: str) -> str:
+	cleaned = _strip_month_keywords(text)
+	return cleaned.rstrip(":").strip()
+
+
+def _is_month_header(text: str) -> bool:
+	if not text:
+		return False
+	cleaned = str(text).strip()
+	if _MONTH_PATTERN.match(cleaned):
+		return True
+	normalized = _normalize_month_header(cleaned)
+	if normalized != cleaned and _MONTH_PATTERN.match(normalized):
+		return True
+	if _MONTH_PATTERN_LOOSE.search(cleaned):
+		return True
+	return False
 
 
 def _drop_summary_rows(df: pd.DataFrame) -> pd.DataFrame:
@@ -12,10 +101,7 @@ def _drop_summary_rows(df: pd.DataFrame) -> pd.DataFrame:
 			id_candidates.append(c)
 	
 	# Identify month columns by pattern
-	import re as _re
-	# Handle both abbreviated and full month names (e.g., "June", "July", "Sept")
-	# Also handle formats like "1-May-23", "1-.1", "23-Mar", "23-Apr" (date columns that might be month indicators)
-	month_cols = [c for c in df.columns if _re.match(r"^(\d+[-.])?(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|Jun(e)?|Jul(y)?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)[a-zA-Z\-']*\s?\d{2,4}$", str(c), _re.IGNORECASE)]
+	month_cols = [c for c in df.columns if _is_month_header(c)]
 	if not month_cols:
 		return df
 
@@ -55,18 +141,14 @@ def _drop_summary_rows(df: pd.DataFrame) -> pd.DataFrame:
 
 def _find_header_row(df: pd.DataFrame) -> int:
 	"""Find the row index that contains the actual data headers (Description, Item Code, month columns)."""
-	import re as _re
 	from datetime import datetime
-	# Handle both abbreviated and full month names (e.g., "June", "July", "Sept")
-	# Also handle formats like "1-May-23", "1-.1", "23-Mar", "23-Apr" (date columns that might be month indicators)
-	month_pattern = _re.compile(r"^(\d+[-.])?(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|Jun(e)?|Jul(y)?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)[a-zA-Z\-']*\s?\d{2,4}$", _re.IGNORECASE)
-	date_pattern = _re.compile(r"^\d{4}-\d{2}-\d{2}")  # Matches dates like "2023-03-05"
+	date_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}")  # Matches dates like "2023-03-05"
 	
 	# Look for a row that has both an ID column and date/month columns
 	for idx, row in df.iterrows():
 		row_strs = [str(v).strip() for v in row.values if pd.notna(v)]
 		# Check if this row has month-like columns (Mar-23 format) OR date columns (2023-03-05 format)
-		month_cols_found = sum(1 for v in row_strs if month_pattern.match(str(v)))
+		month_cols_found = sum(1 for v in row_strs if _is_month_header(v))
 		date_cols_found = sum(1 for v in row_strs if date_pattern.match(str(v)))
 		# Check if this row has ID column indicators
 		id_cols_found = any(
@@ -84,21 +166,16 @@ def read_xlsx_bytes(xlsx_bytes: bytes) -> List[Dict[str, Any]]:
 	# Create BytesIO once and reuse it
 	dfs = pd.read_excel(BytesIO(xlsx_bytes), engine="openpyxl", sheet_name=None, header=None)
 	records: List[Dict[str, Any]] = []
-	import re as _re
-	# Handle both abbreviated and full month names (e.g., "June", "July", "Sept")
-	# Also handle formats like "1-May-23", "1-.1", "23-Mar", "23-Apr" (date columns that might be month indicators)
-	month_pattern = _re.compile(r"^(\d+[-.])?(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|Jun(e)?|Jul(y)?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)[a-zA-Z\-']*\s?\d{2,4}$", _re.IGNORECASE)
 	
 	for sheet_name, df in dfs.items():
 		if df is None or df.empty:
 			continue
 		# Search for header row more aggressively - check first 10 rows
-		import re as _re_date
-		date_pattern = _re_date.compile(r"^\d{4}-\d{2}-\d{2}")  # Matches dates like "2023-03-05"
+		date_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}")  # Matches dates like "2023-03-05"
 		header_row = None
 		for idx in range(min(10, len(df))):  # Check first 10 rows
 			row_values = [str(v).strip() for v in df.iloc[idx].values if pd.notna(v)]
-			month_count = sum(1 for v in row_values if month_pattern.match(str(v)))
+			month_count = sum(1 for v in row_values if _is_month_header(v))
 			date_count = sum(1 for v in row_values if date_pattern.match(str(v)))
 			id_found = any(any(kw in str(v).lower() for kw in ["item code", "description"]) for v in row_values)
 			# Found header if it has ID column and (month columns OR date columns)
@@ -111,8 +188,14 @@ def read_xlsx_bytes(xlsx_bytes: bytes) -> List[Dict[str, Any]]:
 		
 		# Re-read with the correct header row - create new BytesIO for each read
 		df_with_headers = pd.read_excel(BytesIO(xlsx_bytes), engine="openpyxl", sheet_name=sheet_name, header=header_row)
-		# Normalize headers to strings
-		df_with_headers.columns = [str(c).strip() for c in df_with_headers.columns]
+		# Normalize headers to strings and clean month suffixes
+		normalized_columns = []
+		for c in df_with_headers.columns:
+			col_str = str(c).strip()
+			if _is_month_header(col_str):
+				col_str = _normalize_month_header(col_str)
+			normalized_columns.append(col_str)
+		df_with_headers.columns = normalized_columns
 		
 		# Convert date column headers to month format (e.g., "2023-03-05 00:00:00" -> "Mar-23")
 		new_columns = []
@@ -147,21 +230,16 @@ def read_xlsx_file(path: str) -> List[Dict[str, Any]]:
 	# Read without headers first to find the right header row
 	dfs = pd.read_excel(path, engine="openpyxl", sheet_name=None, header=None)
 	records: List[Dict[str, Any]] = []
-	import re as _re
-	# Handle both abbreviated and full month names (e.g., "June", "July", "Sept")
-	# Also handle formats like "1-May-23", "1-.1", "23-Mar", "23-Apr" (date columns that might be month indicators)
-	month_pattern = _re.compile(r"^(\d+[-.])?(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|Jun(e)?|Jul(y)?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)[a-zA-Z\-']*\s?\d{2,4}$", _re.IGNORECASE)
 	
 	for sheet_name, df in dfs.items():
 		if df is None or df.empty:
 			continue
 		# Search for header row more aggressively - check first 10 rows
-		import re as _re_date
-		date_pattern = _re_date.compile(r"^\d{4}-\d{2}-\d{2}")  # Matches dates like "2023-03-05"
+		date_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}")  # Matches dates like "2023-03-05"
 		header_row = None
 		for idx in range(min(10, len(df))):  # Check first 10 rows
 			row_values = [str(v).strip() for v in df.iloc[idx].values if pd.notna(v)]
-			month_count = sum(1 for v in row_values if month_pattern.match(str(v)))
+			month_count = sum(1 for v in row_values if _is_month_header(v))
 			date_count = sum(1 for v in row_values if date_pattern.match(str(v)))
 			id_found = any(any(kw in str(v).lower() for kw in ["item code", "description"]) for v in row_values)
 			# Found header if it has ID column and (month columns OR date columns)
@@ -174,7 +252,13 @@ def read_xlsx_file(path: str) -> List[Dict[str, Any]]:
 		
 		# Re-read with the correct header row
 		df_with_headers = pd.read_excel(path, engine="openpyxl", sheet_name=sheet_name, header=header_row)
-		df_with_headers.columns = [str(c).strip() for c in df_with_headers.columns]
+		normalized_columns = []
+		for c in df_with_headers.columns:
+			col_str = str(c).strip()
+			if _is_month_header(col_str):
+				col_str = _normalize_month_header(col_str)
+			normalized_columns.append(col_str)
+		df_with_headers.columns = normalized_columns
 		
 		# Convert date column headers to month format (e.g., "2023-03-05 00:00:00" -> "Mar-23")
 		new_columns = []

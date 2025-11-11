@@ -5,11 +5,120 @@ import pandas as pd
 from bs4 import BeautifulSoup
 
 _MONTH_PATTERN = re.compile(
-	r"^(\d+[-./])?(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|Jun(e)?|Jul(y)?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)[a-zA-Z\-']*\s?\d{2,4}$",
+	r"^(\d{1,2}[-./])?(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|Jun(e)?|Jul(y)?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)[a-zA-Z\-']*\s?\d{2,4}$",
 	re.IGNORECASE,
 )
+_MONTH_PATTERN_LOOSE = re.compile(
+	r"(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|Jun(e)?|Jul(y)?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)\s*[\'\-/.,]?\s*\d{2,4}",
+	re.IGNORECASE,
+)
+_MONTH_SUFFIX_KEYWORDS = {
+	"qty",
+	"quantity",
+	"quantities",
+	"forecast",
+	"fcst",
+	"volume",
+	"vol",
+	"units",
+	"unit",
+	"demand",
+	"plan",
+	"planning",
+	"projection",
+	"proj",
+	"rolling",
+	"commit",
+	"committed",
+	"target",
+	"budget",
+	"need",
+	"needs",
+	"requirement",
+	"requirements",
+	"req",
+	"reqs",
+	"sales",
+	"shipments",
+	"shipment",
+	"supply",
+	"delivery",
+	"dispatch",
+	"inventory",
+	"stock",
+	"balance",
+	"consumption",
+	"usage",
+	"backlog",
+}
 
 _HEADER_KEYWORDS = {"sku", "description", "batch", "pending", "loc", "location", "material"}
+_HEADER_PRIORITY_KEYWORDS = {
+	"sku",
+	"product",
+	"material",
+	"item",
+	"code",
+	"description",
+	"desc",
+	"date",
+	"delivery",
+	"receipt",
+	"quantity",
+	"qty",
+	"unit",
+	"measure",
+	"category",
+	"order",
+	"lead",
+	"leadtime",
+	"supplier",
+	"bayer",
+	"change",
+	"mdat",
+	"information",
+	"comments",
+	"remark",
+}
+
+
+def _strip_month_keywords(text: str) -> str:
+	if not text:
+		return ""
+	tokens = re.split(r"\s+", str(text).strip())
+	while tokens:
+		last = tokens[-1].strip("()[]{}.,:")
+		if last.lower() in _MONTH_SUFFIX_KEYWORDS:
+			tokens.pop()
+			continue
+		break
+	while tokens:
+		first = tokens[0].strip("()[]{}.,:")
+		if first.lower() in _MONTH_SUFFIX_KEYWORDS:
+			tokens = tokens[1:]
+			continue
+		break
+	stripped = " ".join(tokens).strip()
+	return stripped if stripped else str(text).strip()
+
+
+def _normalize_month_header(text: str) -> str:
+	cleaned = _strip_month_keywords(text)
+	return cleaned.rstrip(":").strip()
+
+
+def _is_month_header(text: str) -> bool:
+	if not text:
+		return False
+	cleaned = str(text).strip()
+	if _MONTH_PATTERN.match(cleaned):
+		return True
+	normalized = _normalize_month_header(cleaned)
+	if normalized != cleaned and _MONTH_PATTERN.match(normalized):
+		return True
+	if _MONTH_PATTERN_LOOSE.search(cleaned):
+		return True
+	return False
 
 
 def _flatten_column_name(col: Any, index: int) -> str:
@@ -25,10 +134,14 @@ def _flatten_column_name(col: Any, index: int) -> str:
 			parts.append(part_str)
 		if not parts:
 			return f"column_{index}"
+		for candidate in parts:
+			lower = candidate.lower()
+			if any(keyword in lower for keyword in _HEADER_PRIORITY_KEYWORDS):
+				return candidate
 		# Prefer the last part if it looks like a month label; otherwise join all parts
 		for candidate in reversed(parts):
-			if _MONTH_PATTERN.match(candidate):
-				return candidate
+			if _is_month_header(candidate):
+				return _normalize_month_header(candidate)
 		return " ".join(parts)
 	else:
 		col_str = str(col).strip()
@@ -74,7 +187,7 @@ def _should_promote_first_row(columns: List[str], first_row: pd.Series) -> bool:
 		text = value.strip()
 		if not text:
 			continue
-		if _MONTH_PATTERN.match(text):
+		if _is_month_header(text):
 			header_like += 1
 			continue
 		lower = text.lower()
@@ -91,7 +204,7 @@ def _score_columns(columns: List[str]) -> int:
 	score = 0
 	for name in columns:
 		lower = name.lower()
-		if _MONTH_PATTERN.match(name):
+		if _is_month_header(name):
 			score += 5
 		if any(keyword in lower for keyword in _HEADER_KEYWORDS):
 			score += 3
@@ -178,7 +291,7 @@ def extract_tables_from_html(html: str) -> List[Dict[str, Any]]:
 						continue
 					if text == col_name:
 						match_count += 1
-					elif _MONTH_PATTERN.match(text):
+					elif _is_month_header(text):
 						match_count += 1
 				return match_count >= max(3, len(row) // 2)
 
