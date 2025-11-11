@@ -38,17 +38,15 @@ SMTP_CONFIG = {
 
 OUTPUT_FILE = "requirements_output.xlsx"
 PROCESSING_STATUS = {"status": "idle", "message": "", "rows_count": 0, "last_updated": None}
-LAST_PROCESSED_DATA = {"columns": [], "rows": []}
 
 def process_emails_async():
     """Run email processing in background thread"""
     global PROCESSING_STATUS
-    global LAST_PROCESSED_DATA
     try:
-        LAST_PROCESSED_DATA = {"columns": [], "rows": []}
         PROCESSING_STATUS["status"] = "processing"
         PROCESSING_STATUS["message"] = "Starting email processing..."
         PROCESSING_STATUS["last_updated"] = datetime.now().isoformat()
+        PROCESSING_STATUS["rows_count"] = 0
 
         # Capture stdout/stderr to avoid interfering with Flask
         stdout_capture = StringIO()
@@ -82,7 +80,11 @@ def process_emails_async():
                 PROCESSING_STATUS["message"] = "No requirements extracted from emails."
                 PROCESSING_STATUS["rows_count"] = 0
                 PROCESSING_STATUS["last_updated"] = datetime.now().isoformat()
-                LAST_PROCESSED_DATA = {"columns": [], "rows": []}
+                if os.path.exists(OUTPUT_FILE):
+                    try:
+                        os.remove(OUTPUT_FILE)
+                    except OSError:
+                        pass
                 return
 
             df = pd.DataFrame(all_rows)
@@ -105,11 +107,12 @@ def process_emails_async():
                     df[col] = ""
             df = df[df_columns]
 
-            records = df.fillna("").to_dict(orient="records")
-            LAST_PROCESSED_DATA = {
-                "columns": df_columns,
-                "rows": records,
-            }
+            df = df.fillna("")
+            if os.path.exists(OUTPUT_FILE):
+                try:
+                    os.remove(OUTPUT_FILE)
+                except OSError:
+                    pass
             df.to_excel(OUTPUT_FILE, index=False)
 
             row_count = len(df)
@@ -155,18 +158,21 @@ def get_status():
 @app.route('/api/data')
 def get_data():
     """Get processed data as JSON"""
-    global LAST_PROCESSED_DATA
-    if LAST_PROCESSED_DATA["columns"] or LAST_PROCESSED_DATA["rows"]:
+    if not os.path.exists(OUTPUT_FILE):
+        return jsonify({"columns": [], "data": [], "row_count": 0})
+    try:
+        df = pd.read_excel(OUTPUT_FILE).fillna("")
+    except Exception as exc:  # noqa: BLE001
         return jsonify({
-            "columns": LAST_PROCESSED_DATA["columns"],
-            "data": LAST_PROCESSED_DATA["rows"],
-            "row_count": len(LAST_PROCESSED_DATA["rows"])
-        })
-    return jsonify({
-        "columns": [],
-        "data": [],
-        "row_count": 0
-    })
+            "columns": [],
+            "data": [],
+            "row_count": 0,
+            "error": f"Failed to read output file: {exc}",
+        }), 500
+
+    columns = df.columns.tolist()
+    rows = df.to_dict(orient="records")
+    return jsonify({"columns": columns, "data": rows, "row_count": len(rows)})
 
 @app.route('/api/download')
 def download_file():
