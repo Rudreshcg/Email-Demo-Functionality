@@ -37,7 +37,10 @@ SMTP_CONFIG = {
 }
 
 OUTPUT_FILE = "requirements_output.xlsx"
-PROCESSING_STATUS = {
+STATUS_FILE = "processing_status.json"
+STATUS_LOCK = threading.Lock()
+
+DEFAULT_STATUS = {
     "status": "idle",
     "message": "",
     "rows_count": 0,
@@ -45,6 +48,55 @@ PROCESSING_STATUS = {
     "columns": [],
     "data": [],
 }
+
+
+def _status_with_defaults(data=None):
+    """Merge persisted data with default structure."""
+    status = DEFAULT_STATUS.copy()
+    if isinstance(data, dict):
+        status.update({k: v for k, v in data.items() if k in status})
+    return status
+
+
+def _read_status_file():
+    """Read processing status from disk, returning defaults on failure."""
+    if not os.path.exists(STATUS_FILE):
+        return DEFAULT_STATUS.copy()
+    try:
+        with open(STATUS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return _status_with_defaults(data)
+    except (OSError, json.JSONDecodeError):
+        return DEFAULT_STATUS.copy()
+
+
+def _write_status_file(status):
+    """Persist processing status to disk atomically."""
+    tmp_path = f"{STATUS_FILE}.tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(status, f, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, STATUS_FILE)
+
+
+PROCESSING_STATUS = _status_with_defaults(_read_status_file())
+
+
+def _sync_status_from_disk():
+    """Refresh in-memory status from disk and return a copy."""
+    latest = _status_with_defaults(_read_status_file())
+    with STATUS_LOCK:
+        PROCESSING_STATUS.clear()
+        PROCESSING_STATUS.update(latest)
+        return PROCESSING_STATUS.copy()
+
+
+def _set_status(**kwargs):
+    """Update status atomically and persist to disk."""
+    with STATUS_LOCK:
+        PROCESSING_STATUS.update(kwargs)
+        PROCESSING_STATUS["last_updated"] = datetime.now().isoformat()
+        _write_status_file(PROCESSING_STATUS)
+        return PROCESSING_STATUS.copy()
 
 
 def _clear_output_file():
@@ -57,16 +109,14 @@ def _clear_output_file():
 
 def process_emails_async():
     """Run email processing in background thread"""
-    global PROCESSING_STATUS
     try:
-        PROCESSING_STATUS.update({
-            "status": "processing",
-            "message": "Starting email processing...",
-            "last_updated": datetime.now().isoformat(),
-            "rows_count": 0,
-            "columns": [],
-            "data": [],
-        })
+        _set_status(
+            status="processing",
+            message="Starting email processing...",
+            rows_count=0,
+            columns=[],
+            data=[],
+        )
 
         _clear_output_file()
 
@@ -98,12 +148,13 @@ def process_emails_async():
                 all_rows.extend(rows)
 
             if not all_rows:
-                PROCESSING_STATUS["status"] = "completed"
-                PROCESSING_STATUS["message"] = "No requirements extracted from emails."
-                PROCESSING_STATUS["rows_count"] = 0
-                PROCESSING_STATUS["last_updated"] = datetime.now().isoformat()
-                PROCESSING_STATUS["columns"] = []
-                PROCESSING_STATUS["data"] = []
+                _set_status(
+                    status="completed",
+                    message="No requirements extracted from emails.",
+                    rows_count=0,
+                    columns=[],
+                    data=[],
+                )
                 _clear_output_file()
                 return
 
@@ -135,24 +186,24 @@ def process_emails_async():
             row_count = len(rows)
             columns = df.columns.tolist()
 
-            PROCESSING_STATUS.update({
-                "columns": columns,
-                "data": rows,
-                "rows_count": row_count,
-                "status": "completed",
-                "message": f"Processing completed successfully. Extracted {row_count} requirement rows.",
-            })
+            _set_status(
+                columns=columns,
+                data=rows,
+                rows_count=row_count,
+                status="completed",
+                message=f"Processing completed successfully. Extracted {row_count} requirement rows.",
+            )
 
     except Exception as exc:  # noqa: BLE001
         import traceback
 
-        PROCESSING_STATUS["status"] = "error"
-        PROCESSING_STATUS["message"] = f"Error during processing: {exc}\n{traceback.format_exc()}"
-        PROCESSING_STATUS["rows_count"] = 0
-        PROCESSING_STATUS["columns"] = []
-        PROCESSING_STATUS["data"] = []
-
-    PROCESSING_STATUS["last_updated"] = datetime.now().isoformat()
+        _set_status(
+            status="error",
+            message=f"Error during processing: {exc}\n{traceback.format_exc()}",
+            rows_count=0,
+            columns=[],
+            data=[],
+        )
 
 
 @app.after_request
@@ -171,19 +222,18 @@ def index():
 @app.route('/api/process', methods=['POST'])
 def trigger_process():
     """Trigger email processing"""
-    global PROCESSING_STATUS
-    
-    if PROCESSING_STATUS["status"] == "processing":
+    current_status = _sync_status_from_disk()
+
+    if current_status.get("status") == "processing":
         return jsonify({"error": "Processing already in progress"}), 400
     
-    PROCESSING_STATUS.update({
-        "status": "processing",
-        "message": "Starting email processing...",
-        "last_updated": datetime.now().isoformat(),
-        "rows_count": 0,
-        "columns": [],
-        "data": [],
-    })
+    _set_status(
+        status="processing",
+        message="Starting email processing...",
+        rows_count=0,
+        columns=[],
+        data=[],
+    )
     _clear_output_file()
     
     # Start processing in background thread
@@ -196,14 +246,16 @@ def trigger_process():
 @app.route('/api/status')
 def get_status():
     """Get processing status"""
-    return jsonify(PROCESSING_STATUS)
+    status = _sync_status_from_disk()
+    return jsonify(status)
 
 @app.route('/api/data')
 def get_data():
     """Get processed data as JSON"""
-    columns = PROCESSING_STATUS.get("columns", [])
-    rows = PROCESSING_STATUS.get("data", [])
-    row_count = PROCESSING_STATUS.get("rows_count", len(rows))
+    status = _sync_status_from_disk()
+    columns = status.get("columns", [])
+    rows = status.get("data", [])
+    row_count = status.get("rows_count", len(rows))
     return jsonify({"columns": columns, "data": rows, "row_count": row_count})
 
 @app.route('/api/download')

@@ -1,3 +1,4 @@
 venv/
 requirements_output.xlsx
 __pycache__/
+processing_status.json
