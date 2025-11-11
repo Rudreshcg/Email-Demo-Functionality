@@ -133,13 +133,15 @@ def process_emails_async():
 
             rows = df.to_dict(orient="records")
             row_count = len(rows)
-            PROCESSING_STATUS["status"] = "completed"
-            PROCESSING_STATUS["message"] = (
-                f"Processing completed successfully. Extracted {row_count} requirement rows."
-            )
-            PROCESSING_STATUS["rows_count"] = row_count
-            PROCESSING_STATUS["columns"] = df.columns.tolist()
-            PROCESSING_STATUS["data"] = rows
+            columns = df.columns.tolist()
+
+            PROCESSING_STATUS.update({
+                "columns": columns,
+                "data": rows,
+                "rows_count": row_count,
+                "status": "completed",
+                "message": f"Processing completed successfully. Extracted {row_count} requirement rows.",
+            })
 
     except Exception as exc:  # noqa: BLE001
         import traceback
@@ -151,6 +153,15 @@ def process_emails_async():
         PROCESSING_STATUS["data"] = []
 
     PROCESSING_STATUS["last_updated"] = datetime.now().isoformat()
+
+
+@app.after_request
+def add_no_cache_headers(response):
+    """Prevent browsers from caching API responses so fresh data is always fetched."""
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 @app.route('/')
 def index():
